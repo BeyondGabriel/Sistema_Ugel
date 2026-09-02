@@ -1,0 +1,217 @@
+// ===========================================================
+// Sistema de Gestión de Personal - UGEL Talara
+// Prisma Schema - Fase 0
+// ===========================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------
+// ENUMS
+// ---------------------------
+
+enum Rol {
+  VIGILANTE
+  ESPECIALISTA
+  JEFE
+  DIRECTORA
+  RRHH
+  ADMIN
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+}
+
+enum TipoTiempo {
+  DIAS
+  HORAS
+}
+
+enum EstadoPapeleta {
+  PENDIENTE
+  EN_REVISION
+  OBSERVADO
+  APROBADO
+  RECHAZADO
+  CANCELADO
+  ANULADO
+  ANULACION_SOLICITADA
+}
+
+// ---------------------------
+// MODELOS
+// ---------------------------
+
+model Usuario {
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  password            String
+  rol                 Rol
+  activo              Boolean   @default(true)
+  cambioPassword      Boolean   @default(true)
+  nombres             String
+  apellidos           String
+  foto                String?
+  fechaCreacion       DateTime  @default(now())
+
+  // Jefatura a la que pertenece el usuario
+  jefaturaId          Int?
+  jefatura            Jefatura? @relation("UsuariosDeJefatura", fields: [jefaturaId], references: [id])
+
+  // Jefatura que este usuario lidera (si su rol es JEFE), relación inversa 1:1
+  jefaturaQueLidera   Jefatura? @relation("JefeDeJefatura")
+
+  // Jefe inmediato (autorelación jerárquica)
+  jefeId              Int?
+  jefe                Usuario?  @relation("Subordinados", fields: [jefeId], references: [id])
+  subordinados        Usuario[] @relation("Subordinados")
+
+  // Usuario que lo reemplaza temporalmente cuando está ausente
+  encargadoTemporalId Int?
+  encargadoTemporal   Usuario?  @relation("EncargadoTemporal", fields: [encargadoTemporalId], references: [id])
+  esEncargadoDe       Usuario[] @relation("EncargadoTemporal")
+
+  // Relaciones con Papeleta
+  papeletasCreadas    Papeleta[] @relation("PapeletasSolicitadas")
+  papeletasAprobadas  Papeleta[] @relation("PapeletasAprobadas")
+  papeletasAnuladas   Papeleta[] @relation("PapeletasAnuladasPorAdmin")
+
+  // Relación con Movimiento (asistencias)
+  movimientos         Movimiento[]
+
+  // Relaciones con Visita
+  visitasRegistradas  Visita[] @relation("VisitasRegistradas")
+  visitasRecibidas    Visita[] @relation("VisitasRecibidas")
+
+  // Notificaciones del usuario
+  notificaciones      Notificacion[]
+
+  // Consultas de token de verificación realizadas por el usuario
+  tokensConsultados   TokenVerificacion[] @relation("TokensConsultados")
+
+  @@index([jefaturaId])
+  @@index([jefeId])
+  @@index([encargadoTemporalId])
+}
+
+model Jefatura {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique
+  descripcion String?
+
+  // Usuarios que pertenecen a esta jefatura (vía Usuario.jefaturaId)
+  usuarios    Usuario[] @relation("UsuariosDeJefatura")
+
+  // Usuario con rol JEFE asignado como cabeza de esta jefatura
+  jefeId      Int?      @unique
+  jefe        Usuario?  @relation("JefeDeJefatura", fields: [jefeId], references: [id])
+}
+
+model Movimiento {
+  id         Int            @id @default(autoincrement())
+  usuarioId  Int
+  usuario    Usuario        @relation(fields: [usuarioId], references: [id])
+  tipo       TipoMovimiento
+  timestamp  DateTime
+  bloqueado  Boolean        @default(false)
+
+  @@index([usuarioId])
+}
+
+model Papeleta {
+  id                Int            @id @default(autoincrement())
+  numero            String         @unique // ej: "0080-2026" (incluye año, único globalmente)
+
+  solicitanteId     Int
+  solicitante       Usuario        @relation("PapeletasSolicitadas", fields: [solicitanteId], references: [id])
+
+  aprobadorId       Int?
+  aprobador         Usuario?       @relation("PapeletasAprobadas", fields: [aprobadorId], references: [id])
+
+  tipoTiempo        TipoTiempo
+  fechaInicio       DateTime
+  fechaFin          DateTime       // si es DIAS: fecha final. Si es HORAS: mismo día, con hora de retorno
+  horaSalida        DateTime?      // solo para HORAS
+  horaRetorno       DateTime?      // solo para HORAS
+
+  motivo            String
+  motivoOtros       String?
+
+  estado            EstadoPapeleta @default(PENDIENTE)
+
+  token             String?        @unique // 6 caracteres, generado al aprobar
+  fechaAprobacion   DateTime?      // momento en que la papeleta pasó a APROBADO
+  motivoRechazo     String?
+  motivoAnulacion   String?
+
+  anuladoPorAdmin   Boolean        @default(false)
+  adminAnuladorId   Int?
+  adminAnulador     Usuario?       @relation("PapeletasAnuladasPorAdmin", fields: [adminAnuladorId], references: [id])
+  fechaAnulacion    DateTime?
+
+  fechaRevision     DateTime?      // momento en que el aprobador abrió la revisión (EN_REVISION)
+
+  firmaExternaSvg   String?        // path/URL al archivo SVG almacenado en Supabase
+
+  fechaCreacion     DateTime       @default(now())
+
+  tokensVerificacion TokenVerificacion[]
+
+  @@index([solicitanteId])
+  @@index([aprobadorId])
+  @@index([adminAnuladorId])
+}
+
+model Visita {
+  id                   Int       @id @default(autoincrement())
+  visitanteNombre      String
+  visitanteDni         String
+
+  trabajadorVisitadoId Int
+  trabajadorVisitado   Usuario   @relation("VisitasRecibidas", fields: [trabajadorVisitadoId], references: [id])
+
+  registradorId        Int
+  registrador          Usuario   @relation("VisitasRegistradas", fields: [registradorId], references: [id])
+
+  horaEntrada          DateTime
+  horaSalida           DateTime?
+  gafeteEntregado      Boolean   @default(false)
+
+  @@index([trabajadorVisitadoId])
+  @@index([registradorId])
+}
+
+model Notificacion {
+  id        Int      @id @default(autoincrement())
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  mensaje   String
+  leida     Boolean  @default(false)
+  fecha     DateTime @default(now())
+
+  @@index([usuarioId])
+}
+
+model TokenVerificacion {
+  id                   Int       @id @default(autoincrement())
+  token                String
+
+  papeletaId           Int
+  papeleta             Papeleta  @relation(fields: [papeletaId], references: [id])
+
+  usuarioConsultanteId Int?
+  consultante          Usuario?  @relation("TokensConsultados", fields: [usuarioConsultanteId], references: [id])
+
+  fechaConsulta        DateTime  @default(now())
+
+  @@index([papeletaId])
+  @@index([usuarioConsultanteId])
+}

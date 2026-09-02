@@ -1,0 +1,59 @@
+# Dependencias
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Archivos de entorno
+.env
+.env.local
+.env.*.local
+
+# Compilación y producción
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Base de datos y migraciones locales
+*.db
+*.sqlite
+*.sqlite3
+prisma/migrations/dev.db
+prisma/migrations/*.db
+
+# Archivos subidos / generados
+uploads/
+*.pdf
+*.xlsx
+*.xls
+*.csv
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Vite
+.vite/
+node_modules/.vite/
+
+# Prisma
+.prisma/
+prisma/dev.db
+prisma/dev.db-journal
