@@ -42,6 +42,18 @@ type ResultadoValidacion =
   | { ok: false; mensaje: string };
 
 /**
+ * Convierte una fecha YYYY-MM-DD a un objeto Date local.
+ * Si `finDelDia` es true, la hora se fija a 23:59:59.999.
+ */
+function parseFechaLocal(fecha: string, finDelDia = false): Date {
+  const [y, m, d] = fecha.split('-').map(Number);
+  if (finDelDia) {
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  return new Date(y, m - 1, d);
+}
+
+/**
  * Valida y normaliza los campos editables de una papeleta. Se usa tanto al
  * crearla como al reenviarla tras una observación, ya que ambos flujos
  * comparten exactamente las mismas reglas de validación.
@@ -207,6 +219,7 @@ export async function crearPapeleta(req: Request, res: Response): Promise<void> 
 /**
  * GET /api/papeletas
  * Lista papeletas con visibilidad y filtros según el rol del usuario.
+ * Los filtros de fecha se aplican a la fecha de creación de la papeleta.
  */
 export async function listarPapeletas(req: Request, res: Response): Promise<void> {
   try {
@@ -252,22 +265,27 @@ export async function listarPapeletas(req: Request, res: Response): Promise<void
       where.estado = estado;
     }
 
+    // Filtro por fecha de creación (no por fecha de inicio)
     if (fechaInicio !== undefined) {
-      const fecha = new Date(fechaInicio);
+      const fecha = parseFechaLocal(fechaInicio);
       if (Number.isNaN(fecha.getTime())) {
         res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
         return;
       }
-      where.fechaInicio = { gte: fecha };
+      where.fechaCreacion = { gte: fecha };
     }
 
     if (fechaFin !== undefined) {
-      const fecha = new Date(fechaFin);
+      const fecha = parseFechaLocal(fechaFin, true);
       if (Number.isNaN(fecha.getTime())) {
         res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
         return;
       }
-      where.fechaFin = { lte: fecha };
+      // Si ya existe un filtro de fechaCreacion, lo conservamos
+      where.fechaCreacion = {
+        ...(where.fechaCreacion as Prisma.DateTimeFilter),
+        lte: fecha,
+      };
     }
 
     const papeletas = await prisma.papeleta.findMany({
@@ -429,8 +447,6 @@ export async function aprobarPapeleta(req: Request, res: Response): Promise<void
       data: {
         estado: EstadoPapeleta.APROBADO,
         token,
-        // aprobadorId ya estaba asignado desde la creación; se mantiene
-        // (o se fija explícitamente al usuario que aprueba, por si acaso).
         aprobadorId: papeleta.aprobadorId ?? usuarioToken.id,
       },
     });
@@ -513,8 +529,7 @@ export async function rechazarPapeleta(req: Request, res: Response): Promise<voi
 /**
  * PUT /api/papeletas/:id/observar
  * Solo el aprobador asignado. EN_REVISION → OBSERVADO. Requiere comentario,
- * que se guarda temporalmente en motivoRechazo (la papeleta aún no está
- * rechazada; el frontend debe presentarlo como "observación").
+ * que se guarda temporalmente en motivoRechazo.
  */
 export async function observarPapeleta(req: Request, res: Response): Promise<void> {
   try {
@@ -679,7 +694,7 @@ export async function reenviarPapeleta(req: Request, res: Response): Promise<voi
         motivo: campos.motivo,
         motivoOtros: campos.motivoOtros,
         estado: EstadoPapeleta.PENDIENTE,
-        motivoRechazo: null, // se limpia el comentario de observación ya atendido
+        motivoRechazo: null,
       },
     });
 

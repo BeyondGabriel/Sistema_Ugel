@@ -12,6 +12,18 @@ import { obtenerRangoDelDia } from '../utils/fechas';
 const ROLES_SOLO_PROPIOS: Rol[] = [Rol.ESPECIALISTA, Rol.JEFE, Rol.DIRECTORA];
 
 /**
+ * Convierte una fecha YYYY-MM-DD a un objeto Date local.
+ * Si `finDelDia` es true, la hora se fija a 23:59:59.999.
+ */
+function parseFechaLocal(fecha: string, finDelDia = false): Date {
+  const [y, m, d] = fecha.split('-').map(Number);
+  if (finDelDia) {
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  return new Date(y, m - 1, d);
+}
+
+/**
  * Cuenta los ciclos ENTRADA→SALIDA completos que ya tiene un usuario en el
  * día calendario de `fecha`. Un ciclo se completa cuando, en orden
  * cronológico, aparece una ENTRADA seguida de una SALIDA.
@@ -287,7 +299,7 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
       const filtroFecha: Prisma.DateTimeFilter = {};
 
       if (fechaInicio !== undefined) {
-        const fecha = new Date(fechaInicio);
+        const fecha = parseFechaLocal(fechaInicio);
         if (Number.isNaN(fecha.getTime())) {
           res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
           return;
@@ -296,7 +308,7 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
       }
 
       if (fechaFin !== undefined) {
-        const fecha = new Date(fechaFin);
+        const fecha = parseFechaLocal(fechaFin, true);
         if (Number.isNaN(fecha.getTime())) {
           res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
           return;

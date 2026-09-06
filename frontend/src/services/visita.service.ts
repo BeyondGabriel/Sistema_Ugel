@@ -31,16 +31,26 @@ export const visitaService = {
     return response.data;
   },
 
-  async exportarVisitas(filtros?: {
-    fechaInicio?: string;
-    fechaFin?: string;
-    trabajadorVisitadoId?: number;
-    registradorId?: number;
-  }) {
-    const response = await api.get('/visitas/exportar', {
-      params: filtros,
-      responseType: 'blob',
-    });
-    return response.data;
-  },
-};
+async exportarVisitas(filtros?: {
+  fechaInicio?: string;
+  fechaFin?: string;
+  trabajadorVisitadoId?: number;
+  registradorId?: number;
+}) {
+  const response = await api.get('/visitas/exportar', {
+    params: filtros,
+    responseType: 'blob',
+  });
+
+  // Crear blob y descargar
+  const url = URL.createObjectURL(response.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `visitas-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  // Liberar memoria
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}}

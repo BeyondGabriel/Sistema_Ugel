@@ -52,6 +52,10 @@ export default function App() {
               <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
               <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
               <Route path="/papeletas" element={<PapeletasPage />} />
+              <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
+              <Route path="/papeletas/:id/reenviar" element={<CrearPapeletaPage />} />
+              <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
+              <Route path="/papeletas" element={<PapeletasPage />} />
               <Route path="/visitas/registro" element={<RegistroVisitaPage />} />
               <Route path="/visitas" element={<VisitasPage />} />
               <Route path="/notificaciones" element={<NotificacionesPage />} />

@@ -17,6 +17,15 @@ import { obtenerIdsVisibles } from '../services/visibilidadPapeletas.service';
 
 const CONTENT_TYPE_EXCEL = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+/** Convierte una fecha YYYY-MM-DD a un Date local. Si finDelDia=true, hora 23:59:59.999 */
+function parseFechaLocal(fecha: string, finDelDia = false): Date {
+  const [y, m, d] = fecha.split('-').map(Number);
+  if (finDelDia) {
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+  return new Date(y, m - 1, d);
+}
+
 async function enviarExcel(res: Response, workbook: ExcelJS.Workbook, nombreArchivo: string): Promise<void> {
   res.setHeader('Content-Type', CONTENT_TYPE_EXCEL);
   res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
@@ -31,20 +40,23 @@ function formatearFecha(fecha: Date | null | undefined): string {
 
 function formatearHora(fecha: Date | null | undefined): string {
   if (!fecha) return '—';
-  return new Date(fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  return new Date(fecha).toLocaleTimeString('es-PE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
-/** Aplica estilo de encabezado (negrita, fondo gris claro, borde fino) a una fila. */
+/** Aplica estilo de encabezado (negrita, fondo gris claro) a una fila. */
 function estilizarCabecera(fila: ExcelJS.Row, numColumnas: number): void {
   fila.font = { bold: true };
   fila.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
-  fila.border = {
-    bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
-  };
   fila.alignment = { vertical: 'middle' };
   fila.height = 20;
+  // Agregar borde solo si la fila tiene celdas
   for (let i = 1; i <= numColumnas; i++) {
-    fila.getCell(i).border = {
+    const cell = fila.getCell(i);
+    cell.border = {
       top: { style: 'thin', color: { argb: 'FF94A3B8' } },
       left: { style: 'thin', color: { argb: 'FF94A3B8' } },
       bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
@@ -59,12 +71,6 @@ function estilizarCabecera(fila: ExcelJS.Row, numColumnas: number): void {
 
 const ROLES_VEN_TODOS_ASISTENCIAS: Rol[] = [Rol.VIGILANTE, Rol.ADMIN, Rol.RRHH];
 
-/**
- * Genera el reporte de asistencias. Agrupa los movimientos por usuario/día:
- * primera ENTRADA del día = Hora Entrada, última SALIDA = Hora Salida.
- * Estado: "Justificado" si hay papeleta APROBADA ese día, "Presente" en
- * caso contrario.
- */
 export async function exportarAsistencias(req: Request, res: Response): Promise<void> {
   try {
     const usuarioToken = req.usuario;
@@ -97,8 +103,8 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
 
     if (fechaInicio || fechaFin) {
       const filtro: Prisma.DateTimeFilter = {};
-      if (fechaInicio) filtro.gte = new Date(fechaInicio);
-      if (fechaFin) filtro.lte = new Date(fechaFin);
+      if (fechaInicio) filtro.gte = parseFechaLocal(fechaInicio);
+      if (fechaFin) filtro.lte = parseFechaLocal(fechaFin, true);
       where.timestamp = filtro;
     }
 
@@ -113,7 +119,7 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
     });
 
     // Agrupar por usuario → día
-    type DiaKey = string; // "YYYY-MM-DD"
+    type DiaKey = string;
     type UsuarioKey = number;
 
     const grupos = new Map<UsuarioKey, Map<DiaKey, typeof movimientos>>();
@@ -134,8 +140,8 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
     const papeletasAprobadas = await prisma.papeleta.findMany({
       where: {
         estado: EstadoPapeleta.APROBADO,
-        ...(fechaInicio ? { fechaInicio: { gte: new Date(fechaInicio) } } : {}),
-        ...(fechaFin ? { fechaFin: { lte: new Date(fechaFin) } } : {}),
+        ...(fechaInicio ? { fechaInicio: { gte: parseFechaLocal(fechaInicio) } } : {}),
+        ...(fechaFin ? { fechaFin: { lte: parseFechaLocal(fechaFin, true) } } : {}),
       },
     });
 
@@ -152,7 +158,6 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
       });
     }
 
-    // Construir filas del Excel
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'SIGPER - UGEL Talara';
     const hoja = workbook.addWorksheet('Asistencias');
@@ -240,8 +245,8 @@ export async function exportarVisitas(req: Request, res: Response): Promise<void
 
     if (fechaInicio || fechaFin) {
       const filtro: Prisma.DateTimeFilter = {};
-      if (fechaInicio) filtro.gte = new Date(fechaInicio);
-      if (fechaFin) filtro.lte = new Date(fechaFin);
+      if (fechaInicio) filtro.gte = parseFechaLocal(fechaInicio);
+      if (fechaFin) filtro.lte = parseFechaLocal(fechaFin, true);
       where.horaEntrada = filtro;
     }
 
@@ -323,7 +328,6 @@ export async function exportarPapeletas(req: Request, res: Response): Promise<vo
       solicitanteId?: string;
     };
 
-    // Reutiliza la misma lógica de visibilidad de papeletas (Fase 4)
     const idsVisibles = await obtenerIdsVisibles(usuarioToken);
 
     const where: Prisma.PapeletaWhereInput = {};
@@ -340,8 +344,28 @@ export async function exportarPapeletas(req: Request, res: Response): Promise<vo
     }
 
     if (estado) where.estado = estado;
-    if (fechaInicio) where.fechaInicio = { gte: new Date(fechaInicio) };
-    if (fechaFin) where.fechaFin = { lte: new Date(fechaFin) };
+
+    // Filtro por fecha de creación (coherente con listado de papeletas)
+    if (fechaInicio !== undefined) {
+      const fecha = parseFechaLocal(fechaInicio);
+      if (Number.isNaN(fecha.getTime())) {
+        res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
+        return;
+      }
+      where.fechaCreacion = { gte: fecha };
+    }
+
+    if (fechaFin !== undefined) {
+      const fecha = parseFechaLocal(fechaFin, true);
+      if (Number.isNaN(fecha.getTime())) {
+        res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
+        return;
+      }
+      where.fechaCreacion = {
+        ...(where.fechaCreacion as Prisma.DateTimeFilter),
+        lte: fecha,
+      };
+    }
 
     const papeletas = await prisma.papeleta.findMany({
       where,

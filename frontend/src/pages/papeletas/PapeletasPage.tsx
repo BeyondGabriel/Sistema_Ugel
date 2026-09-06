@@ -32,6 +32,16 @@ function formatHora(ts: string): string {
   });
 }
 
+function hoyISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function haceUnMesISO(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 const TABS: { label: string; estados: EstadoPapeleta[] }[] = [
   { label: 'Pendientes', estados: ['PENDIENTE', 'EN_REVISION', 'OBSERVADO'] },
   { label: 'Aprobadas', estados: ['APROBADO'] },
@@ -117,8 +127,9 @@ export function PapeletasPage() {
   const [tabActiva, setTabActiva] = useState(0);
   const [exportando, setExportando] = useState(false);
 
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  // Filtros por defecto: desde hace un mes hasta hoy
+  const [fechaInicio, setFechaInicio] = useState(haceUnMesISO());
+  const [fechaFin, setFechaFin] = useState(hoyISO());
 
   const [accionId, setAccionId] = useState<number | null>(null);
 

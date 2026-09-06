@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, type FormEvent } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, DocumentPlusIcon } from '@heroicons/react/24/outline';
 import { papeletaService, type DatosCrearPapeleta } from '../../services/papeleta.service';
 import { useToast } from '../../hooks/useToast';
@@ -22,24 +22,55 @@ const MOTIVOS = [
 ] as const;
 
 const SELECT_CLS = 'w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-
-// Expresión regular para validar horas en formato 24h (HH:mm)
 const REGEX_24H = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export function CrearPapeletaPage() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
   const { mostrar } = useToast();
+  const esEdicion = Boolean(id);
 
   const [tipoTiempo, setTipoTiempo] = useState<'DIAS' | 'HORAS'>('DIAS');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
-  const [fechaHoras, setFechaHoras] = useState('');   // solo para HORAS
+  const [fechaHoras, setFechaHoras] = useState('');
   const [horaSalida, setHoraSalida] = useState('');
   const [horaRetorno, setHoraRetorno] = useState('');
   const [motivo, setMotivo] = useState<string>(MOTIVOS[0]);
   const [motivoOtros, setMotivoOtros] = useState('');
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
+  const [cargando, setCargando] = useState(esEdicion);
+
+  // Cargar papeleta existente si es modo edición
+  useEffect(() => {
+    if (!esEdicion || !id) return;
+    async function cargarPapeleta() {
+      try {
+        const papeleta = await papeletaService.obtenerPapeleta(Number(id));
+        setTipoTiempo(papeleta.tipoTiempo);
+        setMotivo(papeleta.motivo);
+        setMotivoOtros(papeleta.motivoOtros ?? '');
+
+        if (papeleta.tipoTiempo === 'DIAS') {
+          // fechaInicio y fechaFin vienen como ISO; las convertimos a YYYY-MM-DD local
+          setFechaInicio(papeleta.fechaInicio.slice(0, 10));
+          setFechaFin(papeleta.fechaFin.slice(0, 10));
+        } else {
+          // Para horas, suponemos que fechaInicio es la fecha del permiso
+          setFechaHoras(papeleta.fechaInicio.slice(0, 10));
+          setHoraSalida(papeleta.horaSalida?.slice(11, 16) ?? '');
+          setHoraRetorno(papeleta.horaRetorno?.slice(11, 16) ?? '');
+        }
+      } catch {
+        mostrar('No se pudo cargar la papeleta', 'error');
+        navigate('/papeletas');
+      } finally {
+        setCargando(false);
+      }
+    }
+    cargarPapeleta();
+  }, [esEdicion, id, navigate, mostrar]);
 
   function validar(): boolean {
     const e: Record<string, string> = {};
@@ -86,7 +117,6 @@ export function CrearPapeletaPage() {
       let datos: DatosCrearPapeleta;
 
       if (tipoTiempo === 'DIAS') {
-        // Concatenar T00:00:00 para forzar hora local y evitar desfase de zona horaria
         datos = {
           tipoTiempo: 'DIAS',
           fechaInicio: new Date(`${fechaInicio}T00:00:00`).toISOString(),
@@ -108,17 +138,33 @@ export function CrearPapeletaPage() {
         };
       }
 
-      const papeleta = await papeletaService.crearPapeleta(datos);
-      mostrar(`Papeleta N° ${papeleta.numero} creada exitosamente`, 'success');
+      if (esEdicion && id) {
+        // Reenviar papeleta observada
+        const papeleta = await papeletaService.reenviar(Number(id), datos);
+        mostrar(`Papeleta N° ${papeleta.numero} reenviada correctamente`, 'success');
+      } else {
+        // Crear nueva
+        const papeleta = await papeletaService.crearPapeleta(datos);
+        mostrar(`Papeleta N° ${papeleta.numero} creada exitosamente`, 'success');
+      }
+
       navigate('/papeletas');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ??
-        'No se pudo crear la papeleta';
+        'No se pudo guardar la papeleta';
       mostrar(msg, 'error');
     } finally {
       setGuardando(false);
     }
+  }
+
+  if (cargando) {
+    return (
+      <div className="flex justify-center py-20">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      </div>
+    );
   }
 
   return (
@@ -130,7 +176,9 @@ export function CrearPapeletaPage() {
         </Button>
         <div className="flex items-center gap-2">
           <DocumentPlusIcon className="h-5 w-5 text-emerald-400" />
-          <h1 className="text-xl font-bold text-gray-100">Nueva papeleta</h1>
+          <h1 className="text-xl font-bold text-gray-100">
+            {esEdicion ? 'Reenviar papeleta observada' : 'Nueva papeleta'}
+          </h1>
         </div>
       </div>
 
@@ -236,7 +284,7 @@ export function CrearPapeletaPage() {
                 Cancelar
               </Button>
               <Button variant="primary" type="submit" disabled={guardando}>
-                {guardando ? 'Enviando...' : 'Enviar solicitud'}
+                {guardando ? (esEdicion ? 'Reenviando...' : 'Enviando...') : (esEdicion ? 'Reenviar solicitud' : 'Enviar solicitud')}
               </Button>
             </div>
           </div>
