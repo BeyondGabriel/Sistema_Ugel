@@ -9,7 +9,7 @@ SIGPER centraliza la gestión de:
 - asistencias y control de presencia;
 - papeletas de permisos;
 - aprobaciones jerárquicas;
-- anulaciones de papeletas;
+- observación, rechazo, cancelación y anulación de papeletas;
 - visitas y control de gafetes;
 - notificaciones en tiempo real;
 - verificación mediante token;
@@ -17,8 +17,8 @@ SIGPER centraliza la gestión de:
 - reportes en Excel;
 - captura y recepción de firmas externas.
 
-> **Estado:** sistema funcional en desarrollo activo.  
-> Este README describe el estado actual del código y las funcionalidades implementadas en el repositorio.
+> **Estado:** sistema funcional en desarrollo activo.
+> Este README describe el estado actual documentado del proyecto y las modificaciones de seguridad implementadas durante la revisión técnica.
 
 ---
 
@@ -32,6 +32,7 @@ SIGPER centraliza la gestión de:
 - [Instalación](#instalación)
 - [Variables de entorno](#variables-de-entorno)
 - [Acceso inicial](#acceso-inicial)
+- [Seguridad y endurecimiento](#seguridad-y-endurecimiento)
 - [Módulo de autenticación](#módulo-de-autenticación)
 - [Gestión de usuarios y jefaturas](#gestión-de-usuarios-y-jefaturas)
 - [Gestión de asistencias](#gestión-de-asistencias)
@@ -45,12 +46,15 @@ SIGPER centraliza la gestión de:
 - [Gestión de visitas](#gestión-de-visitas)
 - [Notificaciones](#notificaciones)
 - [Reportes y exportaciones](#reportes-y-exportaciones)
+- [Validación de entradas](#validación-de-entradas)
 - [API](#api)
 - [Rutas del frontend](#rutas-del-frontend)
 - [Modelo de datos](#modelo-de-datos)
 - [Jobs periódicos](#jobs-periódicos)
 - [Migraciones](#migraciones)
+- [Scripts disponibles](#scripts-disponibles)
 - [Cambios recientes](#cambios-recientes)
+- [Estado de los puntos críticos](#estado-de-los-puntos-críticos)
 - [Consideraciones actuales](#consideraciones-actuales)
 - [Licencia](#licencia)
 
@@ -127,8 +131,6 @@ El sistema implementa seis roles:
 
 Los roles `ADMIN`, `RRHH` y `DIRECTORA` están sujetos a una regla de negocio que limita a un único usuario activo por cada uno.
 
-La restricción se implementa en la lógica de aplicación y no como una restricción única de base de datos.
-
 ---
 
 # Arquitectura
@@ -146,6 +148,7 @@ SIGPER/
 │       ├── controllers/
 │       ├── middlewares/
 │       ├── routes/
+│       ├── schemas/
 │       ├── services/
 │       ├── sockets/
 │       ├── utils/
@@ -154,8 +157,6 @@ SIGPER/
 │
 ├── frontend/
 │   ├── firma-movil/
-│   │   ├── index.html
-│   │   └── script.js
 │   └── src/
 │       ├── components/
 │       ├── contexts/
@@ -168,6 +169,7 @@ SIGPER/
 │       └── main.tsx
 │
 ├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
@@ -179,7 +181,8 @@ Las responsabilidades principales están separadas en:
 
 - `controllers`: procesamiento de solicitudes HTTP;
 - `routes`: definición de endpoints;
-- `middlewares`: autenticación y autorización;
+- `middlewares`: autenticación, autorización, rate limiting y validación;
+- `schemas`: esquemas de validación con Zod;
 - `services`: reglas de negocio;
 - `sockets`: comunicación Socket.IO;
 - `utils`: utilidades compartidas.
@@ -209,12 +212,14 @@ Utiliza:
 | Autenticación | JWT |
 | Hash de contraseñas | bcryptjs |
 | Tiempo real | Socket.IO |
+| Rate limiting | express-rate-limit |
+| Validación | Zod 4 |
 | Reportes | ExcelJS |
 | PDF | PDFKit |
 | Uploads HTTP | Multer |
-| Frontend | React 18 + TypeScript |
-| Bundler | Vite 5 |
-| Routing | React Router 6 |
+| Frontend | React + TypeScript |
+| Bundler | Vite |
+| Routing | React Router |
 | HTTP client | Axios |
 | UI | Tailwind CSS |
 | Componentes | Headless UI |
@@ -260,16 +265,17 @@ Crear:
 backend/.env
 ```
 
-con las variables necesarias.
-
 Ejemplo:
 
 ```env
 DATABASE_URL="mysql://USUARIO:CONTRASEÑA@localhost:3306/NOMBRE_BASE_DATOS"
 JWT_SECRET="CLAVE_SECRETA_SEGURA"
 PORT=3001
+FRONTEND_ORIGIN="http://localhost:5173"
 WEBHOOK_SECRET="SECRETO_DEL_WEBHOOK"
 ```
+
+No publiques valores reales de estas variables en GitHub.
 
 ## 4. Crear/aplicar la base de datos
 
@@ -301,8 +307,6 @@ Health check:
 GET http://localhost:3001/api/health
 ```
 
----
-
 ## 7. Instalar dependencias del frontend
 
 Desde la raíz:
@@ -324,8 +328,6 @@ Por defecto:
 http://localhost:5173
 ```
 
-Vite está configurado para utilizar el backend mediante proxy durante el desarrollo.
-
 ---
 
 # Variables de entorno
@@ -337,9 +339,16 @@ Vite está configurado para utilizar el backend mediante proxy durante el desarr
 | `DATABASE_URL` | Cadena de conexión de Prisma/MySQL |
 | `JWT_SECRET` | Firma y validación de tokens JWT |
 | `PORT` | Puerto HTTP del backend; por defecto `3001` |
+| `FRONTEND_ORIGIN` | Origen autorizado para CORS |
 | `WEBHOOK_SECRET` | Protección del endpoint de firma externa |
 
-No deben almacenarse credenciales reales en el repositorio.
+## Frontend
+
+La aplicación utiliza la URL configurada para comunicarse con el backend, por ejemplo:
+
+```env
+VITE_API_URL=http://localhost:3001/api
+```
 
 ---
 
@@ -372,6 +381,238 @@ La contraseña nueva debe cumplir las reglas de validación definidas por el bac
 - al menos un símbolo.
 
 Las contraseñas se almacenan mediante `bcryptjs`.
+
+---
+
+# Seguridad y endurecimiento
+
+Esta sección resume los principales cambios aplicados durante la revisión técnica.
+
+## 1. Revalidación de sesión y JWT
+
+El backend ya no depende exclusivamente del contenido del JWT para autorizar una solicitud protegida.
+
+En cada solicitud autenticada se:
+
+1. verifica la firma y vigencia del JWT;
+2. obtiene el `id` del usuario;
+3. consulta el usuario actual en la base de datos;
+4. comprueba que exista y esté activo;
+5. utiliza el rol actual almacenado en la base de datos.
+
+El JWT normal contiene únicamente la identidad mínima necesaria (`id`).
+
+Los tokens temporales para el cambio obligatorio de contraseña incluyen además la marca correspondiente de cambio de contraseña.
+
+### Efectos
+
+- Un usuario desactivado deja de poder consumir endpoints protegidos aunque conserve un JWT válido temporalmente.
+- Un cambio de rol se refleja sin necesidad de cerrar sesión y volver a iniciar sesión.
+- El frontend limpia la sesión cuando recibe un `401` por token inválido, expirado o usuario desactivado.
+
+Socket.IO también valida la existencia, actividad y rol actual del usuario durante el handshake autenticado.
+
+---
+
+## 2. CORS restringido
+
+La configuración anterior basada en origen abierto fue reemplazada por un origen configurable.
+
+Variable utilizada:
+
+```env
+FRONTEND_ORIGIN="http://localhost:5173"
+```
+
+Express utiliza esta variable para la política CORS y Socket.IO utiliza la misma configuración de origen autorizado.
+
+Esto mantiene permitido el frontend actual sin mantener una política de origen abierta de forma general.
+
+---
+
+## 3. Rate limiting
+
+Se incorporó `express-rate-limit` para limitar endpoints sensibles.
+
+### Login
+
+```text
+5 intentos / 15 minutos por IP
+```
+
+Endpoint:
+
+```http
+POST /api/auth/login
+```
+
+### Verificación de token
+
+```text
+10 intentos / 10 minutos por IP
+```
+
+Endpoint:
+
+```http
+POST /api/papeletas/verificar-token
+```
+
+Cuando se alcanza el límite, el backend responde con HTTP `429` y un mensaje específico.
+
+---
+
+## 4. Validación de entradas
+
+Se incorporó **Zod 4** junto con un middleware centralizado de validación:
+
+```text
+backend/src/middlewares/validate.ts
+```
+
+Los esquemas se organizan en:
+
+```text
+backend/src/schemas/
+├── auth.schema.ts
+├── usuario.schema.ts
+├── papeleta.schema.ts
+├── asistencia.schema.ts
+├── visita.schema.ts
+├── notificacion.schema.ts
+├── jefatura.schema.ts
+└── firmaExterna.schema.ts
+```
+
+La validación se aplica a `body`, `params` y `query` según corresponda.
+
+### Criterios generales
+
+- IDs: enteros positivos.
+- Enumeraciones: únicamente valores definidos por el sistema.
+- Booleanos: valores booleanos válidos.
+- Fechas: formato y calendario válidos donde corresponde.
+- Fechas y horas ISO: se admiten cuando ese es el formato real utilizado por el frontend.
+- Strings: no vacíos cuando son obligatorios y con límites de longitud.
+- Objetos: se utilizan esquemas estrictos cuando corresponde para rechazar campos no contemplados.
+- Errores: respuesta uniforme mediante HTTP `400` con `mensaje` y detalle por campo.
+
+### Validaciones específicas
+
+#### Autenticación
+
+Se validan:
+
+```text
+email
+password
+passwordActual
+nuevaPassword
+```
+
+#### Usuarios
+
+Se validan:
+
+```text
+email
+password
+rol
+nombres
+apellidos
+jefaturaId
+jefeId
+activo
+usuarioId
+```
+
+además de los parámetros y filtros correspondientes.
+
+#### Papeletas
+
+Se validan:
+
+```text
+tipoTiempo
+fechaInicio
+fechaFin
+horaSalida
+horaRetorno
+motivo
+motivoOtros
+motivoRechazo
+comentario
+motivoAnulacion
+id
+estado
+solicitanteId
+token
+```
+
+El token de verificación debe tener exactamente 6 caracteres del conjunto utilizado por el generador de tokens.
+
+#### Asistencias
+
+Se validan:
+
+```text
+usuarioId
+tipo
+timestamp
+nuevoTimestamp
+nuevoTipo
+fechaInicio
+fechaFin
+jefaturaId
+id
+```
+
+#### Visitas
+
+Se validan:
+
+```text
+visitanteNombre
+visitanteDni
+trabajadorVisitadoId
+gafeteEntregado
+fechaInicio
+fechaFin
+registradorId
+id
+```
+
+El DNI se valida como una cadena de 8 dígitos.
+
+#### Notificaciones
+
+Se validan:
+
+```text
+soloNoLeidas
+id
+```
+
+#### Jefaturas
+
+Se validan:
+
+```text
+nombre
+descripcion
+id
+```
+
+#### Firma externa
+
+Se validan:
+
+```text
+papeletaId
+svgUrl
+```
+
+La validación estructural del webhook pertenece a este punto; la seguridad específica del secreto `x-webhook-secret` se mantiene como una preocupación independiente del Punto 6.
 
 ---
 
@@ -409,6 +650,22 @@ Authorization: Bearer <TOKEN>
 
 El frontend conserva actualmente el token en `localStorage`.
 
+## Cambio obligatorio de contraseña
+
+```http
+POST /api/auth/cambiar-password
+```
+
+Permite completar el cambio inicial y después cerrar la sesión temporal para exigir un login normal.
+
+## Perfil
+
+```http
+GET /api/auth/mi-perfil
+```
+
+Devuelve la información actual del usuario autenticado.
+
 ---
 
 # Gestión de usuarios y jefaturas
@@ -425,29 +682,18 @@ El sistema permite:
 - establecer jefe inmediato;
 - establecer encargado temporal.
 
-Los usuarios poseen:
-
-```text
-id
-email
-password
-rol
-activo
-cambioPassword
-nombres
-apellidos
-foto
-jefaturaId
-jefeId
-encargadoTemporalId
-fechaCreacion
-```
+Los usuarios mantienen información de identificación, rol, estado, jefatura y relaciones jerárquicas.
 
 ## Jefaturas
 
-El sistema permite crear, editar, consultar y eliminar jefaturas.
+El sistema permite:
 
-Una jefatura puede tener un usuario designado como jefe.
+- listar jefaturas;
+- crear jefaturas;
+- editar jefaturas;
+- eliminar jefaturas sin usuarios asociados.
+
+Las operaciones de escritura están restringidas a `ADMIN`.
 
 ---
 
@@ -466,7 +712,7 @@ SALIDA
 POST /api/asistencias
 ```
 
-El registro operativo está destinado principalmente a `VIGILANTE` y `ADMIN`.
+El registro operativo está destinado a `VIGILANTE` y `ADMIN`.
 
 ## Límite diario
 
@@ -518,10 +764,6 @@ AUSENTE
 
 según el último movimiento registrado durante el día.
 
-## Fechas
-
-Los filtros de fecha utilizan interpretación local para evitar desfases producidos por la conversión directa de fechas `YYYY-MM-DD` a UTC.
-
 ---
 
 # Gestión de papeletas
@@ -555,31 +797,13 @@ horaSalida
 horaRetorno
 ```
 
----
-
 ## Motivos
 
-El frontend ofrece motivos como:
+El sistema utiliza motivos predefinidos y permite información adicional cuando corresponde el motivo `Otros`.
 
-- Descanso médico;
-- Atención médica;
-- Asunto particular;
-- Comisión de servicio;
-- Docencia;
-- Onomástico;
-- Vacaciones;
-- Omisión de marcado entrada/salida;
-- Autorización de ingreso fuera de tolerancia;
-- Compensación de horas trabajadas;
-- Otros.
+## Flujo de estados
 
-Para `Otros` se puede registrar información adicional.
-
----
-
-# Estados de papeleta
-
-Los estados definidos por Prisma son:
+Los estados definidos son:
 
 ```text
 PENDIENTE
@@ -592,36 +816,23 @@ ANULADO
 ANULACION_SOLICITADA
 ```
 
-Flujo principal:
+Flujo general:
 
 ```text
-                 ┌──────────────┐
-                 │   PENDIENTE  │
-                 └──────┬───────┘
-                        │
-                        ▼
-                ┌───────────────┐
-                │  EN_REVISION  │
-                └───┬─────┬─────┘
-                    │     │
-          ┌─────────┘     └─────────┐
-          ▼                         ▼
-    ┌───────────┐             ┌───────────┐
-    │ OBSERVADO │             │ APROBADO  │
-    └─────┬─────┘             └─────┬─────┘
-          │                         │
-          ▼                         ▼
-     REENVÍO                    ANULACIÓN
-          │                         │
-          ▼                         ▼
-      PENDIENTE        ANULACION_SOLICITADA
-                                    │
-                         ┌──────────┴──────────┐
-                         ▼                     ▼
-                     APROBADO                ANULADO
+PENDIENTE
+   │
+   ▼
+EN_REVISION
+   ├─────────────► RECHAZADO
+   │
+   ├─────────────► APROBADO
+   │                 │
+   │                 └──► ANULACION_SOLICITADA ──► ANULADO
+   │
+   └─────────────► OBSERVADO ──► REENVÍO ──► PENDIENTE
 ```
 
-También existen transiciones de rechazo y cancelación según las reglas de negocio.
+También existen transiciones de cancelación según las reglas de negocio.
 
 ---
 
@@ -629,16 +840,14 @@ También existen transiciones de rechazo y cancelación según las reglas de neg
 
 El aprobador se determina según el rol del solicitante y su estructura organizacional.
 
-La lógica contempla:
-
-| Solicitante | Aprobador |
+| Solicitante | Flujo de aprobación |
 |---|---|
-| `DIRECTORA` | Autoaprobación según la lógica de negocio |
+| `DIRECTORA` | Autoaprobación según lógica de negocio |
 | `ESPECIALISTA` | Jefe inmediato |
 | `JEFE` | Directora |
 | `VIGILANTE` | RRHH |
-| `RRHH` | Jefe inmediato |
-| `ADMIN` | Jefe inmediato |
+| `RRHH` | Según la estructura configurada |
+| `ADMIN` | Según la estructura configurada |
 
 Si no existe un aprobador válido, la operación se rechaza.
 
@@ -670,38 +879,6 @@ Si el tiempo se supera:
 EN_REVISION → PENDIENTE
 ```
 
-El sistema notifica la expiración.
-
-Esto permite que una papeleta que quedó abandonada durante una revisión vuelva a estar disponible.
-
----
-
-# Reenvío de papeletas observadas
-
-Las papeletas en estado:
-
-```text
-OBSERVADO
-```
-
-pueden ser corregidas y reenviadas por el solicitante.
-
-El frontend dispone de una ruta específica:
-
-```text
-/papeletas/:id/reenviar
-```
-
-El formulario carga la información de la papeleta existente y permite modificarla antes del reenvío.
-
-El reenvío devuelve la papeleta a:
-
-```text
-PENDIENTE
-```
-
-y limpia el comentario de observación almacenado.
-
 ---
 
 # Anulación de papeletas
@@ -718,29 +895,9 @@ ANULACION_SOLICITADA
 ANULADO
 ```
 
-Las reglas de tiempo dependen del tipo de papeleta.
+Las reglas de tiempo dependen del tipo de papeleta y de la lógica de negocio del sistema.
 
-## Papeletas por días
-
-La anulación está permitida mientras no haya comenzado el periodo solicitado, salvo las reglas especiales de `ADMIN`.
-
-## Papeletas por horas
-
-La posibilidad de anulación depende de que el trabajador todavía no haya registrado su regreso correspondiente.
-
-## ADMIN
-
-El administrador dispone de permisos especiales para anular papeletas.
-
-## Expiración
-
-Un job periódico comprueba las solicitudes cuya ventana de anulación ya terminó.
-
-Cuando corresponde, la solicitud se cierra automáticamente.
-
-## Alertas
-
-El sistema puede generar notificaciones cuando queda una hora o menos para que termine la ventana de anulación.
+El administrador dispone de permisos especiales para anular.
 
 ---
 
@@ -756,7 +913,7 @@ puede bloquear el registro de asistencia correspondiente al periodo autorizado.
 
 ## DIAS
 
-El bloqueo cubre el intervalo de fechas:
+El bloqueo cubre:
 
 ```text
 fechaInicio → fechaFin
@@ -772,13 +929,7 @@ horaSalida → horaRetorno
 
 El bloqueo se determina dinámicamente a partir de las papeletas aprobadas.
 
-Esto significa que una papeleta que pasa de:
-
-```text
-APROBADO → ANULADO
-```
-
-deja de producir el bloqueo.
+Cuando una papeleta deja de estar aprobada, deja de producir el bloqueo correspondiente.
 
 ---
 
@@ -786,45 +937,40 @@ deja de producir el bloqueo.
 
 Las papeletas aprobadas pueden recibir un token de verificación único.
 
-El modelo almacena:
-
-```text
-Papeleta.token
-```
-
-y registra consultas mediante:
-
-```text
-TokenVerificacion
-```
-
 Endpoint:
 
 ```http
 POST /api/papeletas/verificar-token
 ```
 
-Frontend:
+El token se registra y las consultas se auditan mediante:
 
 ```text
-/verificar-token
+TokenVerificacion
 ```
 
-El sistema registra, cuando corresponde, el usuario que realizó la consulta y la fecha de consulta.
+La validación HTTP exige exactamente seis caracteres del alfabeto definido por el generador de tokens.
 
 ---
 
 # Firmas externas
 
-El sistema incorpora soporte backend para recibir la ubicación de una firma externa.
-
-Endpoint:
+El backend recibe la referencia de una firma externa mediante:
 
 ```http
 POST /api/firmas/webhook
 ```
 
-La autenticación del webhook utiliza:
+El request esperado contiene:
+
+```json
+{
+  "papeletaId": 123,
+  "svgUrl": "https://..."
+}
+```
+
+La petición usa el header:
 
 ```http
 x-webhook-secret: <WEBHOOK_SECRET>
@@ -836,7 +982,7 @@ El modelo `Papeleta` dispone de:
 firmaExternaSvg
 ```
 
-para almacenar la ruta o URL de la firma.
+para almacenar la URL o referencia de la firma.
 
 ## Firma móvil
 
@@ -854,19 +1000,6 @@ Permite:
 - generar un SVG;
 - visualizar la firma;
 - descargar el SVG.
-
-### Estado de la integración
-
-```text
-Captura de firma       → IMPLEMENTADA
-Generación SVG         → IMPLEMENTADA
-Descarga SVG           → IMPLEMENTADA
-Webhook backend        → IMPLEMENTADO
-Almacenamiento externo → PREPARADO
-Subida automática      → PENDIENTE DE CONFIGURACIÓN
-```
-
-La implementación incluida contiene la estructura necesaria para integrar almacenamiento externo, pero la subida a Supabase no debe considerarse activa hasta completar su configuración.
 
 ---
 
@@ -905,9 +1038,14 @@ PUT /api/visitas/:id/gafete
 
 Actualiza el estado de entrega del gafete.
 
-## Notificación
+## Consulta
 
-Al registrar una visita se genera una notificación para el trabajador visitado.
+```http
+GET /api/visitas
+GET /api/visitas/:id
+```
+
+Los resultados se restringen según el rol del usuario y los filtros recibidos.
 
 ---
 
@@ -961,32 +1099,11 @@ El backend genera archivos `.xlsx` utilizando ExcelJS.
 GET /api/asistencias/exportar
 ```
 
-Incluye información como:
-
-- trabajador;
-- jefatura;
-- fecha;
-- hora de entrada;
-- hora de salida;
-- estado.
-
-Los filtros de fecha se interpretan con fecha local y el límite final se establece al final del día.
-
 ## Visitas
 
 ```http
 GET /api/visitas/exportar
 ```
-
-Incluye:
-
-- visitante;
-- DNI;
-- trabajador visitado;
-- jefatura;
-- hora de entrada;
-- hora de salida;
-- estado del gafete.
 
 ## Papeletas
 
@@ -994,20 +1111,40 @@ Incluye:
 GET /api/papeletas/exportar
 ```
 
-Incluye información como:
+Las exportaciones utilizan los mismos criterios de filtrado temporal definidos por cada módulo.
 
-- número;
-- solicitante;
-- jefatura;
-- tipo;
-- fechas;
-- horas;
-- motivo;
-- estado;
-- aprobador;
-- fecha de creación.
+---
 
-Los filtros de la exportación de papeletas utilizan la **fecha de creación de la papeleta**, manteniendo el mismo criterio utilizado en el listado.
+# Validación de entradas
+
+La validación HTTP se centraliza mediante:
+
+```text
+backend/src/middlewares/validate.ts
+```
+
+con esquemas separados por dominio.
+
+Cuando una entrada no es válida, la API utiliza el formato:
+
+```json
+{
+  "mensaje": "Los datos enviados no son válidos",
+  "errores": {
+    "campo": "Descripción del error"
+  }
+}
+```
+
+Los controladores conservan las reglas de negocio que dependen de la base de datos o del estado de la operación. Por ejemplo:
+
+- existencia de usuarios, jefaturas o papeletas;
+- permisos sobre recursos concretos;
+- estado de una papeleta;
+- presencia de un trabajador;
+- bloqueos por papeletas;
+- límites operativos;
+- jerarquía de aprobación.
 
 ---
 
@@ -1119,7 +1256,6 @@ Las principales rutas disponibles son:
 ```text
 /login
 /cambiar-password
-
 /dashboard
 
 /usuarios
@@ -1147,8 +1283,6 @@ Las principales rutas disponibles son:
 
 La navegación se encuentra protegida mediante `ProtectedRoute`.
 
-La interfaz también adapta las opciones disponibles según el usuario autenticado.
-
 ---
 
 # Modelo de datos
@@ -1167,23 +1301,11 @@ TokenVerificacion
 
 ## Usuario
 
-Representa a cada trabajador o usuario del sistema.
-
-Mantiene relaciones con:
-
-- jefatura;
-- jefe inmediato;
-- subordinados;
-- encargado temporal;
-- asistencias;
-- papeletas;
-- visitas;
-- notificaciones;
-- consultas de tokens.
+Representa a cada trabajador o usuario del sistema y mantiene relaciones jerárquicas y operativas.
 
 ## Jefatura
 
-Representa una unidad organizacional y puede tener un jefe asignado.
+Representa una unidad organizacional.
 
 ## Movimiento
 
@@ -1208,7 +1330,7 @@ Almacena mensajes destinados a usuarios.
 
 ## TokenVerificacion
 
-Registra las consultas realizadas sobre tokens de verificación de papeletas.
+Registra consultas realizadas sobre tokens de verificación de papeletas.
 
 ---
 
@@ -1220,29 +1342,11 @@ Actualmente se realizan tres procesos:
 
 ### 1. Revisiones vencidas
 
-Busca papeletas:
-
-```text
-EN_REVISION
-```
-
-cuya revisión superó el límite establecido.
-
-Las devuelve a:
-
-```text
-PENDIENTE
-```
+Busca papeletas `EN_REVISION` cuya revisión superó el límite establecido y las devuelve a `PENDIENTE` cuando corresponde.
 
 ### 2. Solicitudes de anulación vencidas
 
-Busca solicitudes:
-
-```text
-ANULACION_SOLICITADA
-```
-
-cuya ventana temporal terminó y ejecuta la lógica correspondiente.
+Busca solicitudes `ANULACION_SOLICITADA` cuya ventana temporal terminó y ejecuta la lógica correspondiente.
 
 ### 3. Alertas de anulación
 
@@ -1255,14 +1359,6 @@ Comprueba ventanas próximas a vencer y genera las notificaciones correspondient
 # Migraciones
 
 El proyecto contiene migraciones Prisma para la estructura actual de la base de datos.
-
-Entre ellas se encuentra la migración inicial y la incorporación de:
-
-```text
-fechaRevision
-```
-
-en `Papeleta`, utilizada para controlar el tiempo de revisión.
 
 Para aplicar migraciones en desarrollo:
 
@@ -1290,7 +1386,7 @@ npm run prisma:seed
 | `dev` | Ejecuta el servidor con Nodemon + ts-node |
 | `build` | Compila TypeScript |
 | `start` | Ejecuta la versión compilada |
-| `prisma:migrate` | Ejecuta las migraciones de Prisma |
+| `prisma:migrate` | Ejecuta migraciones de Prisma |
 | `prisma:seed` | Inicializa datos base |
 
 ## Frontend
@@ -1301,182 +1397,171 @@ npm run build
 npm run preview
 ```
 
-| Script | Función |
-|---|---|
-| `dev` | Servidor de desarrollo Vite |
-| `build` | Compilación TypeScript + Vite |
-| `preview` | Previsualización de la build |
-
 ---
 
 # Cambios recientes
 
-El repositorio cuenta actualmente con dos commits principales:
+## Punto 1 — Revalidación de JWT y sesión
 
-```text
-8836b9f  fix: se solucionaron los problemas de las fechas,
-         notificaciones, edicíon y reenvio de papeletas y
-         descarga de reportes excel
+Se implementó la revalidación del usuario autenticado contra la base de datos en cada petición protegida.
 
-83e4ebe  Initial commit: Estructura base del proyecto
+Cambios principales:
+
+- el JWT normal contiene únicamente el `id`;
+- el middleware `authJWT` consulta el usuario actual;
+- se rechazan cuentas inexistentes o inactivas;
+- el rol utilizado por autorización es el rol actual de la base de datos;
+- Socket.IO valida la sesión durante el handshake.
+
+Validaciones funcionales realizadas:
+
+- cambio de `ESPECIALISTA` a `RRHH` sin cerrar sesión;
+- cambio inverso de `RRHH` a `ESPECIALISTA` sin cerrar sesión;
+- desactivación de una cuenta durante una sesión activa.
+
+## Punto 2 — CORS
+
+Se sustituyó la configuración de origen abierto por una política configurable mediante:
+
+```env
+FRONTEND_ORIGIN=http://localhost:5173
 ```
 
-El commit más reciente incorpora principalmente las siguientes mejoras.
+La misma política se aplica al servidor Express y Socket.IO.
 
-## Fechas
+## Punto 3 — Rate limiting
 
-Se corrigió el tratamiento de fechas `YYYY-MM-DD` para evitar desfases producidos por conversiones UTC/locales.
-
-Los filtros de:
-
-- asistencias;
-- visitas;
-- papeletas;
-- reportes Excel;
-
-utilizan interpretación de fecha local.
-
-Para fechas finales se considera el final del día:
+Se incorporó `express-rate-limit` mediante:
 
 ```text
-23:59:59.999
+backend/src/middlewares/rateLimit.ts
 ```
 
-## Papeletas
-
-Se incorporó el reenvío de papeletas observadas desde el frontend.
-
-Nueva ruta:
+Configuración actual:
 
 ```text
-/papeletas/:id/reenviar
+Login             → 5 / 15 minutos
+Verificar token   → 10 / 10 minutos
 ```
 
-El formulario puede cargar una papeleta existente y reutilizarla para su corrección y reenvío.
+Se verificó funcionalmente la respuesta HTTP `429` al superar ambos límites.
 
-También se ajustaron los filtros del listado y exportación para utilizar:
+## Punto 4 — Validación de entradas
+
+Se incorporó Zod 4 y el middleware:
 
 ```text
-fechaCreacion
+backend/src/middlewares/validate.ts
 ```
 
-como criterio de fecha de la papeleta.
-
-## Notificaciones
-
-Se reorganizó el servicio frontend para exponer:
+Se añadieron esquemas para:
 
 ```text
-listarNotificaciones()
+auth
+usuarios
+papeletas
+asistencias
+visitas
+notificaciones
+jefaturas
+firmas externas
 ```
 
-manteniendo `listar()` como alias de compatibilidad.
+Se realizaron pruebas funcionales sobre:
 
-## Reportes Excel
+- entradas inválidas;
+- IDs no numéricos;
+- IDs negativos;
+- fechas inválidas;
+- enumeraciones inválidas;
+- filtros inválidos;
+- token de verificación con formato incorrecto;
+- bodies incompletos;
+- registro de datos válidos después de incorporar los esquemas.
 
-Se corrigieron:
+Los módulos principales continuaron funcionando con datos válidos después de la integración de la validación.
 
-- filtros de fecha;
-- formato de horas de 24 horas;
-- descarga de archivos Excel desde frontend;
-- exportación de visitas;
-- exportación de papeletas;
-- exportación de asistencias;
-- formato de encabezados.
+---
 
-La descarga de visitas se realiza directamente como Blob en el navegador.
+# Estado de los puntos críticos
+
+| Punto | Descripción | Estado |
+|---|---|---|
+| 1 | Revalidación de JWT y revocación lógica de sesión | ✅ Implementado y probado |
+| 2 | Restricción de CORS | ✅ Implementado y probado |
+| 3 | Rate limiting | ✅ Implementado y probado |
+| 4 | Validación estructurada de entradas | ✅ Implementado y probado |
+| 5 | Revisión de roles y autorización | ⏳ Pendiente |
+| 6 | Seguridad del webhook de firma externa | ⏳ Pendiente |
 
 ---
 
 # Consideraciones actuales
 
-Esta sección documenta aspectos importantes del estado actual del proyecto que deben tenerse presentes antes de un despliegue institucional.
+La aplicación continúa en desarrollo y todavía requiere endurecimientos adicionales antes de un despliegue institucional definitivo.
 
-## Seguridad
+## CORS en producción
 
-La configuración actual de CORS es permisiva durante el desarrollo.
+La variable `FRONTEND_ORIGIN` debe configurarse con el origen real del frontend institucional y no con `localhost` cuando el sistema se publique en el servidor definitivo.
 
-En producción debe restringirse el origen autorizado del frontend.
+## JWT en frontend
 
-Socket.IO también debe configurarse para aceptar únicamente los orígenes necesarios.
+El frontend conserva actualmente el JWT en `localStorage`. Para escenarios con requisitos superiores de seguridad puede evaluarse un mecanismo basado en cookies `HttpOnly`, `Secure` y `SameSite`.
 
-## Autenticación
+## Rate limiting
 
-Los JWT se almacenan actualmente en `localStorage`.
-
-Para un despliegue con mayores requisitos de seguridad se debe evaluar el uso de cookies `HttpOnly`, `Secure` y `SameSite`.
+El rate limiting actual utiliza el almacenamiento en memoria y la identidad de origen predeterminada de `express-rate-limit`. Para múltiples instancias del backend se deberá evaluar un almacenamiento compartido.
 
 ## Jobs
 
-Los procesos periódicos se ejecutan dentro del proceso Node.js mediante `setInterval`.
-
-Si posteriormente se ejecutan múltiples instancias del backend, estos jobs deberán migrarse a un mecanismo de scheduler/worker con control de concurrencia.
+Los procesos periódicos se ejecutan dentro del proceso Node.js mediante `setInterval`. Para múltiples instancias del backend deberá evaluarse un scheduler o worker con coordinación para evitar duplicidades.
 
 ## Concurrencia
 
-Las operaciones que generan consecutivos de papeletas y algunas transiciones de estado deben endurecerse antes de trabajar con cargas concurrentes importantes.
+La numeración de papeletas y otras operaciones críticas de estado deben seguir siendo revisadas antes de trabajar con cargas concurrentes mayores.
 
 ## Auditoría
 
-Actualmente la papeleta mantiene su estado actual, pero no existe un historial completo de todas las transiciones de estado.
+El sistema registra consultas de tokens, pero una bitácora completa de todas las transiciones de estado puede requerir una implementación específica de auditoría.
 
-Para un entorno institucional sería recomendable implementar una bitácora de auditoría.
+## Webhook de firma externa
 
-## Validación
+El webhook estructuralmente validado pertenece al Punto 4, pero su endurecimiento criptográfico y de autenticación continúa contemplado en el Punto 6.
 
-Las validaciones principales existen en los servicios, pero sería conveniente incorporar validación estructurada de payloads HTTP mediante una librería de esquemas como Zod.
+## Pruebas automatizadas
 
-## Pruebas
-
-No se incluye actualmente una suite de pruebas automatizadas.
-
-Antes de producción se recomienda implementar pruebas unitarias e integración para:
-
-- autenticación;
-- permisos;
-- asistencias;
-- aprobación;
-- observación;
-- reenvío;
-- anulación;
-- tokens;
-- concurrencia;
-- reportes.
-
-## Firma externa
-
-La captura de firma está implementada, pero la subida al almacenamiento externo requiere completar la configuración correspondiente.
+El proyecto no incorpora actualmente una suite automatizada completa para todas las reglas de negocio. Las pruebas realizadas durante esta etapa fueron funcionales/manuales.
 
 ---
 
 # Estado funcional
-
-El sistema ha evolucionado desde la estructura inicial del proyecto hasta una aplicación funcional con múltiples módulos implementados.
 
 Actualmente se encuentran implementados:
 
 ```text
 Autenticación              ✓
 Usuarios                   ✓
-Jefaturas                 ✓
-Asistencias               ✓
-Control de presencia      ✓
-Papeletas                 ✓
-Aprobación jerárquica     ✓
-Observación/reenvío        ✓
-Rechazo/cancelación       ✓
-Anulación                 ✓
-Tokens de verificación    ✓
-Generación de PDF         ✓
-Visitas                   ✓
-Notificaciones            ✓
-Socket.IO                 ✓
+Jefaturas                  ✓
+Asistencias                ✓
+Control de presencia       ✓
+Papeletas                  ✓
+Aprobación jerárquica      ✓
+Observación/reenvío         ✓
+Rechazo/cancelación         ✓
+Anulación                  ✓
+Tokens de verificación     ✓
+Generación de PDF          ✓
+Visitas                    ✓
+Notificaciones             ✓
+Socket.IO                  ✓
 Reportes Excel             ✓
-Captura de firma          ✓
-Webhook de firma          ✓
+Captura de firma           ✓
+Webhook de firma           ✓
+Rate limiting              ✓
+Validación con Zod         ✓
+CORS restringido            ✓
+Revalidación de JWT        ✓
 ```
-
-La integración de almacenamiento externo para firmas se encuentra preparada pero requiere configuración adicional.
 
 ---
 
@@ -1485,3 +1570,27 @@ La integración de almacenamiento externo para firmas se encuentra preparada per
 Este proyecto se distribuye bajo la licencia **MIT**.
 
 Consulta el archivo `LICENSE` incluido en el repositorio para conocer los términos completos.
+
+```text
+MIT License
+
+Copyright (c) 2026 UGEL Talara
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files, to deal in the Software
+without restriction, including without limitation the rights to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

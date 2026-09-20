@@ -6,7 +6,7 @@
 
 import { Rol } from '@prisma/client';
 import prisma from '../utils/prisma';
-import { PayloadJWT } from '../middlewares/authJWT';
+import { UsuarioAutenticado } from '../middlewares/authJWT';
 
 /**
  * Devuelve los ids de solicitante que el usuario autenticado puede ver,
@@ -16,7 +16,9 @@ import { PayloadJWT } from '../middlewares/authJWT';
  * - DIRECTORA: ve las propias + las de todos los usuarios con rol JEFE.
  * - ESPECIALISTA, VIGILANTE: solo las propias.
  */
-export async function obtenerIdsVisibles(usuarioToken: PayloadJWT): Promise<number[] | null> {
+export async function obtenerIdsVisibles(
+  usuarioToken: UsuarioAutenticado,
+): Promise<number[] | null> {
   if (usuarioToken.rol === Rol.ADMIN || usuarioToken.rol === Rol.RRHH) {
     return null;
   }
@@ -26,6 +28,7 @@ export async function obtenerIdsVisibles(usuarioToken: PayloadJWT): Promise<numb
       where: { jefeId: usuarioToken.id },
       select: { id: true },
     });
+
     return [usuarioToken.id, ...subordinados.map((u) => u.id)];
   }
 
@@ -34,6 +37,7 @@ export async function obtenerIdsVisibles(usuarioToken: PayloadJWT): Promise<numb
       where: { rol: Rol.JEFE },
       select: { id: true },
     });
+
     return [usuarioToken.id, ...jefes.map((u) => u.id)];
   }
 
@@ -42,10 +46,16 @@ export async function obtenerIdsVisibles(usuarioToken: PayloadJWT): Promise<numb
 }
 
 /** Verifica si el usuario autenticado puede ver la papeleta de un solicitante dado. */
-export async function usuarioPuedeVerPapeleta(usuarioToken: PayloadJWT, solicitanteId: number): Promise<boolean> {
+export async function usuarioPuedeVerPapeleta(
+  usuarioToken: UsuarioAutenticado,
+  solicitanteId: number,
+): Promise<boolean> {
   const idsVisibles = await obtenerIdsVisibles(usuarioToken);
+
   if (idsVisibles === null) {
     return true;
   }
+
   return idsVisibles.includes(solicitanteId);
 }
+

@@ -54,9 +54,17 @@ export function VerificarTokenPage() {
     try {
       const res = await papeletaService.verificarToken(tokenLimpio);
       setResultado(res);
-    } catch {
-      mostrar('Error al verificar el token', 'error');
-    } finally {
+
+    } catch (err: unknown) {
+      const mensaje =
+        (err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje ??
+        'No se pudo verificar el token. Inténtalo nuevamente.';
+      mostrar(mensaje, 'error');
+    }
+
+
+
+      finally {
       setVerificando(false);
     }
   }

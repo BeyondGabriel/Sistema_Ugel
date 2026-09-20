@@ -3,23 +3,68 @@
 // ===========================================================
 
 import { Router } from 'express';
+
 import {
   registrarMovimiento,
   editarMovimiento,
   listarMovimientos,
   obtenerPresencia,
 } from '../controllers/asistencia.controller';
+
 import { exportarAsistencias } from '../controllers/reportes.controller';
+
 import { authJWT } from '../middlewares/authJWT';
 import { checkRole } from '../middlewares/checkRole';
+import { validate } from '../middlewares/validate';
+
+import {
+  registrarMovimientoSchema,
+  editarMovimientoSchema,
+  asistenciaIdParamsSchema,
+  listarMovimientosQuerySchema,
+  obtenerPresenciaQuerySchema,
+} from '../schemas/asistencia.schema';
 
 const router = Router();
 
-router.post('/', authJWT, checkRole('VIGILANTE', 'ADMIN'), registrarMovimiento);
+router.post(
+  '/',
+  authJWT,
+  checkRole('VIGILANTE', 'ADMIN'),
+  validate(registrarMovimientoSchema, 'body'),
+  registrarMovimiento,
+);
+
 // /exportar debe ir antes de /:id para que Express no lo trate como parámetro
-router.get('/exportar', authJWT, checkRole('VIGILANTE', 'ADMIN', 'RRHH'), exportarAsistencias);
-router.put('/:id', authJWT, checkRole('VIGILANTE', 'ADMIN'), editarMovimiento);
-router.get('/', authJWT, listarMovimientos);
-router.get('/presencia', authJWT, checkRole('VIGILANTE', 'ADMIN', 'RRHH'), obtenerPresencia);
+router.get(
+  '/exportar',
+  authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH'),
+  exportarAsistencias,
+);
+
+router.put(
+  '/:id',
+  authJWT,
+  checkRole('VIGILANTE', 'ADMIN'),
+  validate(asistenciaIdParamsSchema, 'params'),
+  validate(editarMovimientoSchema, 'body'),
+  editarMovimiento,
+);
+
+router.get(
+  '/',
+  authJWT,
+  validate(listarMovimientosQuerySchema, 'query'),
+  listarMovimientos,
+);
+
+router.get(
+  '/presencia',
+  authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH'),
+  validate(obtenerPresenciaQuerySchema, 'query'),
+  obtenerPresencia,
+);
 
 export default router;

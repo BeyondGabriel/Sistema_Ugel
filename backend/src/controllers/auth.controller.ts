@@ -29,17 +29,27 @@ function obtenerJwtSecret(): string {
  * cambioPassword=true, se emite un token temporal de corta duración
  * (15 min) pensado únicamente para completar el cambio de contraseña.
  * En caso contrario, se emite un token normal de sesión (8 horas).
+ *
+ * El JWT contiene únicamente el ID del usuario y, en el caso del token
+ * temporal, la marca requiereCambioPassword. El email y el rol no se
+ * almacenan en el token porque se obtienen desde la base de datos en
+ * cada petición autenticada mediante authJWT.
  */
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password } = req.body as { email?: string; password?: string };
+    const { email, password } = req.body as {
+      email?: string;
+      password?: string;
+    };
 
     if (!email || !password) {
       res.status(400).json({ mensaje: 'Email y contraseña son obligatorios' });
       return;
     }
 
-    const usuario = await prisma.usuario.findUnique({ where: { email } });
+    const usuario = await prisma.usuario.findUnique({
+      where: { email },
+    });
 
     if (!usuario) {
       res.status(401).json({ mensaje: 'Credenciales inválidas' });
@@ -47,7 +57,9 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     if (!usuario.activo) {
-      res.status(403).json({ mensaje: 'El usuario está desactivado. Contacte con el administrador.' });
+      res.status(403).json({
+        mensaje: 'El usuario está desactivado. Contacte con el administrador.',
+      });
       return;
     }
 
@@ -60,6 +72,12 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     const secret = obtenerJwtSecret();
 
+    /**
+     * Estos datos siguen formando parte de la respuesta del login
+     * para que el frontend pueda inicializar la sesión.
+     *
+     * No se incluyen dentro del JWT.
+     */
     const datosBasicos = {
       id: usuario.id,
       email: usuario.email,
@@ -69,31 +87,44 @@ export async function login(req: Request, res: Response): Promise<void> {
     };
 
     if (usuario.cambioPassword) {
-      // Token de corta duración: en esta fase solo se usa para /cambiar-password
+      /**
+       * Token temporal:
+       * - identifica al usuario mediante su ID;
+       * - marca que se trata de un token para cambio de contraseña;
+       * - expira después de 15 minutos.
+       */
       const payload: PayloadJWT = {
         id: usuario.id,
-        email: usuario.email,
-        rol: usuario.rol,
         requiereCambioPassword: true,
       };
 
-      const tokenTemporal = jwt.sign(payload, secret, { expiresIn: EXPIRACION_TOKEN_TEMPORAL });
+      const tokenTemporal = jwt.sign(payload, secret, {
+        expiresIn: EXPIRACION_TOKEN_TEMPORAL,
+      });
 
       res.status(200).json({
         requiereCambioPassword: true,
         token: tokenTemporal,
         usuario: datosBasicos,
       });
+
       return;
     }
 
+    /**
+     * Token normal de sesión:
+     * contiene únicamente el ID del usuario.
+     *
+     * El email y el rol actuales se obtendrán desde la BD mediante
+     * authJWT en cada petición autenticada.
+     */
     const payload: PayloadJWT = {
       id: usuario.id,
-      email: usuario.email,
-      rol: usuario.rol,
     };
 
-    const token = jwt.sign(payload, secret, { expiresIn: EXPIRACION_TOKEN_NORMAL });
+    const token = jwt.sign(payload, secret, {
+      expiresIn: EXPIRACION_TOKEN_NORMAL,
+    });
 
     res.status(200).json({
       requiereCambioPassword: false,
@@ -128,28 +159,38 @@ export async function cambiarPassword(req: Request, res: Response): Promise<void
     };
 
     if (!passwordActual || !nuevaPassword) {
-      res.status(400).json({ mensaje: 'passwordActual y nuevaPassword son obligatorios' });
+      res.status(400).json({
+        mensaje: 'passwordActual y nuevaPassword son obligatorios',
+      });
       return;
     }
 
     if (!validarPassword(nuevaPassword)) {
       res.status(400).json({
-        mensaje: 'La nueva contraseña debe tener mínimo 8 caracteres, al menos un número y un símbolo',
+        mensaje:
+          'La nueva contraseña debe tener mínimo 8 caracteres, al menos un número y un símbolo',
       });
       return;
     }
 
-    const usuario = await prisma.usuario.findUnique({ where: { id: usuarioToken.id } });
+    const usuario = await prisma.usuario.findUnique({
+      where: { id: usuarioToken.id },
+    });
 
     if (!usuario) {
       res.status(404).json({ mensaje: 'Usuario no encontrado' });
       return;
     }
 
-    const passwordActualEsCorrecta = await bcrypt.compare(passwordActual, usuario.password);
+    const passwordActualEsCorrecta = await bcrypt.compare(
+      passwordActual,
+      usuario.password
+    );
 
     if (!passwordActualEsCorrecta) {
-      res.status(401).json({ mensaje: 'La contraseña actual no es correcta' });
+      res.status(401).json({
+        mensaje: 'La contraseña actual no es correcta',
+      });
       return;
     }
 
@@ -163,7 +204,9 @@ export async function cambiarPassword(req: Request, res: Response): Promise<void
       },
     });
 
-    res.status(200).json({ mensaje: 'Contraseña actualizada correctamente' });
+    res.status(200).json({
+      mensaje: 'Contraseña actualizada correctamente',
+    });
   } catch (error) {
     console.error('Error en cambiarPassword:', error);
     res.status(500).json({ mensaje: 'Error interno del servidor' });
@@ -190,7 +233,14 @@ export async function miPerfil(req: Request, res: Response): Promise<void> {
       where: { id: usuarioToken.id },
       include: {
         jefatura: true,
-        jefe: { select: { id: true, nombres: true, apellidos: true, rol: true } },
+        jefe: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+            rol: true,
+          },
+        },
       },
     });
 
@@ -201,7 +251,9 @@ export async function miPerfil(req: Request, res: Response): Promise<void> {
 
     const { password, ...usuarioSinPassword } = usuario;
 
-    res.status(200).json({ usuario: usuarioSinPassword });
+    res.status(200).json({
+      usuario: usuarioSinPassword,
+    });
   } catch (error) {
     console.error('Error en miPerfil:', error);
     res.status(500).json({ mensaje: 'Error interno del servidor' });

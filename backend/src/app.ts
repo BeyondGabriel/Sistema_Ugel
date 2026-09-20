@@ -6,6 +6,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
 import authRoutes from './routes/auth.routes';
 import usuarioRoutes from './routes/usuario.routes';
 import asistenciaRoutes from './routes/asistencia.routes';
@@ -19,7 +20,20 @@ dotenv.config();
 
 const app = express();
 
-app.use(cors());
+const frontendOrigin = process.env.FRONTEND_ORIGIN;
+
+if (!frontendOrigin) {
+  throw new Error(
+    'FRONTEND_ORIGIN no está configurado en las variables de entorno'
+  );
+}
+
+app.use(
+  cors({
+    origin: frontendOrigin,
+  })
+);
+
 app.use(express.json());
 
 // Rutas de la aplicación
@@ -37,12 +51,14 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({ estado: 'ok' });
 });
 
-// Middleware de manejo de errores global. Debe registrarse al final,
-// después de todas las rutas, y con 4 parámetros para que Express
-// lo reconozca como middleware de errores.
+// Middleware de manejo de errores global.
+// Debe registrarse al final, después de todas las rutas,
+// y con 4 parámetros para que Express lo reconozca
+// como middleware de errores.
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Error no controlado:', err);
   res.status(500).json({ mensaje: 'Error interno del servidor' });
 });
 
 export default app;
+
