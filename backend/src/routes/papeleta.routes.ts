@@ -70,6 +70,7 @@ router.post(
 router.get(
   '/exportar',
   authJWT,
+  validate(listarPapeletasQuerySchema, 'query'),
   exportarPapeletas,
 );
 

@@ -35,7 +35,12 @@ router.post(
 );
 
 // /exportar debe ir antes de /:id
-router.get('/exportar', authJWT, exportarVisitas);
+router.get(
+  '/exportar',
+  authJWT,
+  validate(listarVisitasQuerySchema, 'query'),
+  exportarVisitas,
+);
 
 router.get(
   '/',

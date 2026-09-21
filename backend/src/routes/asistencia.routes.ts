@@ -35,11 +35,11 @@ router.post(
   registrarMovimiento,
 );
 
-// /exportar debe ir antes de /:id para que Express no lo trate como parámetro
 router.get(
   '/exportar',
   authJWT,
   checkRole('VIGILANTE', 'ADMIN', 'RRHH'),
+  validate(listarMovimientosQuerySchema, 'query'),
   exportarAsistencias,
 );
 
