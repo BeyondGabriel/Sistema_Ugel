@@ -49,12 +49,12 @@ export const crearUsuarioSchema = z
 
     apellidos: apellidosSchema,
 
-    jefaturaId: idSchema.optional(),
+    jefaturaId: idSchema.nullable().optional(),
 
-    jefeId: idSchema.optional(),
+    jefeId: idSchema.nullable().optional(),
   })
   .strict();
-
+  
 export const editarUsuarioSchema = z
   .object({
     email: emailSchema.optional(),

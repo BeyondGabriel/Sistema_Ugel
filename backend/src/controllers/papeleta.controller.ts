@@ -46,11 +46,36 @@ type ResultadoValidacion =
  * Si `finDelDia` es true, la hora se fija a 23:59:59.999.
  */
 function parseFechaLocal(fecha: string, finDelDia = false): Date {
-  const [y, m, d] = fecha.split('-').map(Number);
-  if (finDelDia) {
-    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  const valor = fecha.trim();
+
+  // YYYY-MM-DD: se interpreta como fecha local.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    const [y, m, d] = valor.split('-').map(Number);
+    const resultado = finDelDia
+      ? new Date(y, m - 1, d, 23, 59, 59, 999)
+      : new Date(y, m - 1, d);
+
+    // Evita que JavaScript normalice fechas inexistentes,
+    // por ejemplo 2026-02-30 -> 2026-03-02.
+    if (
+      resultado.getFullYear() !== y ||
+      resultado.getMonth() !== m - 1 ||
+      resultado.getDate() !== d
+    ) {
+      return new Date(NaN);
+    }
+
+    return resultado;
   }
-  return new Date(y, m - 1, d);
+
+  // ISO 8601 UTC.
+  if (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(valor)
+  ) {
+    return new Date(valor);
+  }
+
+  return new Date(NaN);
 }
 
 /**
@@ -59,7 +84,15 @@ function parseFechaLocal(fecha: string, finDelDia = false): Date {
  * comparten exactamente las mismas reglas de validación.
  */
 function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion {
-  const { tipoTiempo, fechaInicio, fechaFin, horaSalida, horaRetorno, motivo, motivoOtros } = input;
+  const {
+    tipoTiempo,
+    fechaInicio,
+    fechaFin,
+    horaSalida,
+    horaRetorno,
+    motivo,
+    motivoOtros,
+  } = input;
 
   if (!tipoTiempo || !motivo) {
     return { ok: false, mensaje: 'tipoTiempo y motivo son obligatorios' };
@@ -74,25 +107,39 @@ function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion 
   }
 
   if (motivo === MOTIVO_OTROS && !motivoOtros) {
-    return { ok: false, mensaje: 'motivoOtros es obligatorio cuando el motivo es "Otros"' };
+    return {
+      ok: false,
+      mensaje: 'motivoOtros es obligatorio cuando el motivo es "Otros"',
+    };
   }
 
-  const motivoOtrosFinal = motivo === MOTIVO_OTROS ? motivoOtros ?? null : null;
+  const motivoOtrosFinal =
+    motivo === MOTIVO_OTROS ? motivoOtros ?? null : null;
 
   if (tipoTiempo === TipoTiempo.DIAS) {
     if (!fechaInicio || !fechaFin) {
-      return { ok: false, mensaje: 'fechaInicio y fechaFin son obligatorios para papeletas de tipo DIAS' };
+      return {
+        ok: false,
+        mensaje:
+          'fechaInicio y fechaFin son obligatorios para papeletas de tipo DIAS',
+      };
     }
 
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
 
     if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
-      return { ok: false, mensaje: 'fechaInicio o fechaFin no son fechas válidas' };
+      return {
+        ok: false,
+        mensaje: 'fechaInicio o fechaFin no son fechas válidas',
+      };
     }
 
     if (fin < inicio) {
-      return { ok: false, mensaje: 'fechaFin debe ser mayor o igual a fechaInicio' };
+      return {
+        ok: false,
+        mensaje: 'fechaFin debe ser mayor o igual a fechaInicio',
+      };
     }
 
     return {
@@ -111,18 +158,31 @@ function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion 
 
   // tipoTiempo === HORAS
   if (!horaSalida || !horaRetorno) {
-    return { ok: false, mensaje: 'horaSalida y horaRetorno son obligatorios para papeletas de tipo HORAS' };
+    return {
+      ok: false,
+      mensaje:
+        'horaSalida y horaRetorno son obligatorios para papeletas de tipo HORAS',
+    };
   }
 
   const salida = new Date(horaSalida);
   const retorno = new Date(horaRetorno);
 
-  if (Number.isNaN(salida.getTime()) || Number.isNaN(retorno.getTime())) {
-    return { ok: false, mensaje: 'horaSalida o horaRetorno no son fechas/horas válidas' };
+  if (
+    Number.isNaN(salida.getTime()) ||
+    Number.isNaN(retorno.getTime())
+  ) {
+    return {
+      ok: false,
+      mensaje: 'horaSalida o horaRetorno no son fechas/horas válidas',
+    };
   }
 
   if (retorno <= salida) {
-    return { ok: false, mensaje: 'horaRetorno debe ser posterior a horaSalida' };
+    return {
+      ok: false,
+      mensaje: 'horaRetorno debe ser posterior a horaSalida',
+    };
   }
 
   const mismoDia =
@@ -131,7 +191,10 @@ function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion 
     salida.getDate() === retorno.getDate();
 
   if (!mismoDia) {
-    return { ok: false, mensaje: 'horaSalida y horaRetorno deben ser del mismo día' };
+    return {
+      ok: false,
+      mensaje: 'horaSalida y horaRetorno deben ser del mismo día',
+    };
   }
 
   return {
@@ -154,15 +217,22 @@ function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion 
  * Crea una papeleta, calcula su número anual, determina el aprobador
  * según la jerarquía y, si el solicitante es Directora, la auto-aprueba.
  */
-export async function crearPapeleta(req: Request, res: Response): Promise<void> {
+export async function crearPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
       res.status(401).json({ mensaje: 'No autenticado' });
       return;
     }
 
-    const resultado = validarCamposPapeleta(req.body as CamposPapeletaInput);
+    const resultado = validarCamposPapeleta(
+      req.body as CamposPapeletaInput
+    );
+
     if (!resultado.ok) {
       res.status(400).json({ mensaje: resultado.mensaje });
       return;
@@ -171,13 +241,17 @@ export async function crearPapeleta(req: Request, res: Response): Promise<void> 
     const { campos } = resultado;
 
     let aprobadorId: number | null;
+
     try {
       aprobadorId = await determinarAprobador(usuarioToken.id);
     } catch (error) {
       if (error instanceof AprobadorNoEncontradoError) {
-        res.status(400).json({ mensaje: 'No hay un aprobador disponible para su rol' });
+        res.status(400).json({
+          mensaje: 'No hay un aprobador disponible para su rol',
+        });
         return;
       }
+
       throw error;
     }
 
@@ -196,7 +270,9 @@ export async function crearPapeleta(req: Request, res: Response): Promise<void> 
         horaRetorno: campos.horaRetorno,
         motivo: campos.motivo,
         motivoOtros: campos.motivoOtros,
-        estado: esAutoAprobada ? EstadoPapeleta.APROBADO : EstadoPapeleta.PENDIENTE,
+        estado: esAutoAprobada
+          ? EstadoPapeleta.APROBADO
+          : EstadoPapeleta.PENDIENTE,
         solicitante: { connect: { id: usuarioToken.id } },
       };
 
@@ -221,15 +297,24 @@ export async function crearPapeleta(req: Request, res: Response): Promise<void> 
  * Lista papeletas con visibilidad y filtros según el rol del usuario.
  * Los filtros de fecha se aplican a la fecha de creación de la papeleta.
  */
-export async function listarPapeletas(req: Request, res: Response): Promise<void> {
+export async function listarPapeletas(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
       res.status(401).json({ mensaje: 'No autenticado' });
       return;
     }
 
-    const { estado, solicitanteId, fechaInicio, fechaFin } = req.query as {
+    const {
+      estado,
+      solicitanteId,
+      fechaInicio,
+      fechaFin,
+    } = req.query as {
       estado?: EstadoPapeleta;
       solicitanteId?: string;
       fechaInicio?: string;
@@ -242,13 +327,22 @@ export async function listarPapeletas(req: Request, res: Response): Promise<void
 
     if (solicitanteId !== undefined) {
       const solicitanteIdNum = Number(solicitanteId);
+
       if (Number.isNaN(solicitanteIdNum)) {
-        res.status(400).json({ mensaje: 'solicitanteId debe ser numérico' });
+        res.status(400).json({
+          mensaje: 'solicitanteId debe ser numérico',
+        });
         return;
       }
 
-      if (idsVisibles !== null && !idsVisibles.includes(solicitanteIdNum)) {
-        res.status(403).json({ mensaje: 'No tiene permisos para ver las papeletas de este usuario' });
+      if (
+        idsVisibles !== null &&
+        !idsVisibles.includes(solicitanteIdNum)
+      ) {
+        res.status(403).json({
+          mensaje:
+            'No tiene permisos para ver las papeletas de este usuario',
+        });
         return;
       }
 
@@ -259,40 +353,100 @@ export async function listarPapeletas(req: Request, res: Response): Promise<void
 
     if (estado !== undefined) {
       if (!Object.values(EstadoPapeleta).includes(estado)) {
-        res.status(400).json({ mensaje: 'El estado especificado no es válido' });
+        res.status(400).json({
+          mensaje: 'El estado especificado no es válido',
+        });
         return;
       }
+
       where.estado = estado;
     }
 
     // Filtro por fecha de creación (no por fecha de inicio)
+    let fechaInicioFiltro: Date | undefined;
+    let fechaFinFiltro: Date | undefined;
+
     if (fechaInicio !== undefined) {
       const fecha = parseFechaLocal(fechaInicio);
+
       if (Number.isNaN(fecha.getTime())) {
-        res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
+        res.status(400).json({
+          mensaje: 'Los datos enviados no son válidos',
+          errores: {
+            fechaInicio: 'La fecha no es válida',
+          },
+        });
         return;
       }
-      where.fechaCreacion = { gte: fecha };
+
+      fechaInicioFiltro = fecha;
     }
 
     if (fechaFin !== undefined) {
       const fecha = parseFechaLocal(fechaFin, true);
+
       if (Number.isNaN(fecha.getTime())) {
-        res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
+        res.status(400).json({
+          mensaje: 'Los datos enviados no son válidos',
+          errores: {
+            fechaFin: 'La fecha no es válida',
+          },
+        });
         return;
       }
-      // Si ya existe un filtro de fechaCreacion, lo conservamos
-      where.fechaCreacion = {
-        ...(where.fechaCreacion as Prisma.DateTimeFilter),
-        lte: fecha,
-      };
+
+      fechaFinFiltro = fecha;
+    }
+
+    // Validación semántica del rango
+    if (
+      fechaInicioFiltro !== undefined &&
+      fechaFinFiltro !== undefined &&
+      fechaInicioFiltro > fechaFinFiltro
+    ) {
+      res.status(400).json({
+        mensaje: 'Los datos enviados no son válidos',
+        errores: {
+          fechaFin: 'fechaFin debe ser mayor o igual a fechaInicio',
+        },
+      });
+      return;
+    }
+
+    if (
+      fechaInicioFiltro !== undefined ||
+      fechaFinFiltro !== undefined
+    ) {
+      where.fechaCreacion = {};
+
+      if (fechaInicioFiltro !== undefined) {
+        (where.fechaCreacion as Prisma.DateTimeFilter).gte =
+          fechaInicioFiltro;
+      }
+
+      if (fechaFinFiltro !== undefined) {
+        (where.fechaCreacion as Prisma.DateTimeFilter).lte =
+          fechaFinFiltro;
+      }
     }
 
     const papeletas = await prisma.papeleta.findMany({
       where,
       include: {
-        solicitante: { select: { id: true, nombres: true, apellidos: true } },
-        aprobador: { select: { id: true, nombres: true, apellidos: true } },
+        solicitante: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
+        aprobador: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
       },
       orderBy: { fechaCreacion: 'desc' },
     });
@@ -300,7 +454,9 @@ export async function listarPapeletas(req: Request, res: Response): Promise<void
     res.status(200).json({ papeletas });
   } catch (error) {
     console.error('Error en listarPapeletas:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -309,36 +465,65 @@ export async function listarPapeletas(req: Request, res: Response): Promise<void
  * Obtiene una papeleta por id, validando visibilidad según rol y
  * aplicando el timeout de "En revisión" antes de devolverla.
  */
-export async function obtenerPapeleta(req: Request, res: Response): Promise<void> {
+export async function obtenerPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
     let papeleta = await prisma.papeleta.findUnique({
       where: { id },
       include: {
-        solicitante: { select: { id: true, nombres: true, apellidos: true } },
-        aprobador: { select: { id: true, nombres: true, apellidos: true } },
+        solicitante: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
+        aprobador: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+          },
+        },
       },
     });
 
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
-    const puedeVer = await usuarioPuedeVerPapeleta(usuarioToken, papeleta.solicitanteId);
+    const puedeVer = await usuarioPuedeVerPapeleta(
+      usuarioToken,
+      papeleta.solicitanteId
+    );
+
     if (!puedeVer) {
-      res.status(403).json({ mensaje: 'No tiene permisos para ver esta papeleta' });
+      res.status(403).json({
+        mensaje: 'No tiene permisos para ver esta papeleta',
+      });
       return;
     }
 
@@ -347,7 +532,9 @@ export async function obtenerPapeleta(req: Request, res: Response): Promise<void
     res.status(200).json({ papeleta });
   } catch (error) {
     console.error('Error en obtenerPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -355,30 +542,47 @@ export async function obtenerPapeleta(req: Request, res: Response): Promise<void
  * PUT /api/papeletas/:id/revisar
  * Solo el aprobador asignado. PENDIENTE → EN_REVISION, fechaRevision = now().
  */
-export async function iniciarRevision(req: Request, res: Response): Promise<void> {
+export async function iniciarRevision(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.aprobadorId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el aprobador asignado puede iniciar la revisión de esta papeleta' });
+      res.status(403).json({
+        mensaje:
+          'Solo el aprobador asignado puede iniciar la revisión de esta papeleta',
+      });
       return;
     }
 
@@ -391,13 +595,20 @@ export async function iniciarRevision(req: Request, res: Response): Promise<void
 
     const papeletaActualizada = await prisma.papeleta.update({
       where: { id },
-      data: { estado: EstadoPapeleta.EN_REVISION, fechaRevision: new Date() },
+      data: {
+        estado: EstadoPapeleta.EN_REVISION,
+        fechaRevision: new Date(),
+      },
     });
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en iniciarRevision:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -406,30 +617,46 @@ export async function iniciarRevision(req: Request, res: Response): Promise<void
  * Solo el aprobador asignado. EN_REVISION → APROBADO, genera token,
  * aplica bloqueos de asistencia y notifica al solicitante.
  */
-export async function aprobarPapeleta(req: Request, res: Response): Promise<void> {
+export async function aprobarPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.aprobadorId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el aprobador asignado puede aprobar esta papeleta' });
+      res.status(403).json({
+        mensaje: 'Solo el aprobador asignado puede aprobar esta papeleta',
+      });
       return;
     }
 
@@ -455,13 +682,17 @@ export async function aprobarPapeleta(req: Request, res: Response): Promise<void
 
     notificar(
       papeletaActualizada.solicitanteId,
-      `Su papeleta ${papeletaActualizada.numero} fue aprobada. Token de verificación: ${token}`,
+      `Su papeleta ${papeletaActualizada.numero} fue aprobada. Token de verificación: ${token}`
     );
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en aprobarPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -469,36 +700,58 @@ export async function aprobarPapeleta(req: Request, res: Response): Promise<void
  * PUT /api/papeletas/:id/rechazar
  * Solo el aprobador asignado. EN_REVISION → RECHAZADO. Requiere motivoRechazo.
  */
-export async function rechazarPapeleta(req: Request, res: Response): Promise<void> {
+export async function rechazarPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    const { motivoRechazo } = req.body as { motivoRechazo?: string };
+    const { motivoRechazo } = req.body as {
+      motivoRechazo?: string;
+    };
+
     if (!motivoRechazo) {
-      res.status(400).json({ mensaje: 'motivoRechazo es obligatorio' });
+      res.status(400).json({
+        mensaje: 'motivoRechazo es obligatorio',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.aprobadorId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el aprobador asignado puede rechazar esta papeleta' });
+      res.status(403).json({
+        mensaje:
+          'Solo el aprobador asignado puede rechazar esta papeleta',
+      });
       return;
     }
 
@@ -511,18 +764,25 @@ export async function rechazarPapeleta(req: Request, res: Response): Promise<voi
 
     const papeletaActualizada = await prisma.papeleta.update({
       where: { id },
-      data: { estado: EstadoPapeleta.RECHAZADO, motivoRechazo },
+      data: {
+        estado: EstadoPapeleta.RECHAZADO,
+        motivoRechazo,
+      },
     });
 
     notificar(
       papeletaActualizada.solicitanteId,
-      `Su papeleta ${papeletaActualizada.numero} fue rechazada. Motivo: ${motivoRechazo}`,
+      `Su papeleta ${papeletaActualizada.numero} fue rechazada. Motivo: ${motivoRechazo}`
     );
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en rechazarPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -531,36 +791,58 @@ export async function rechazarPapeleta(req: Request, res: Response): Promise<voi
  * Solo el aprobador asignado. EN_REVISION → OBSERVADO. Requiere comentario,
  * que se guarda temporalmente en motivoRechazo.
  */
-export async function observarPapeleta(req: Request, res: Response): Promise<void> {
+export async function observarPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    const { comentario } = req.body as { comentario?: string };
+    const { comentario } = req.body as {
+      comentario?: string;
+    };
+
     if (!comentario) {
-      res.status(400).json({ mensaje: 'comentario es obligatorio' });
+      res.status(400).json({
+        mensaje: 'comentario es obligatorio',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.aprobadorId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el aprobador asignado puede observar esta papeleta' });
+      res.status(403).json({
+        mensaje:
+          'Solo el aprobador asignado puede observar esta papeleta',
+      });
       return;
     }
 
@@ -573,18 +855,25 @@ export async function observarPapeleta(req: Request, res: Response): Promise<voi
 
     const papeletaActualizada = await prisma.papeleta.update({
       where: { id },
-      data: { estado: EstadoPapeleta.OBSERVADO, motivoRechazo: comentario },
+      data: {
+        estado: EstadoPapeleta.OBSERVADO,
+        motivoRechazo: comentario,
+      },
     });
 
     notificar(
       papeletaActualizada.solicitanteId,
-      `Su papeleta ${papeletaActualizada.numero} fue observada. Comentario: ${comentario}`,
+      `Su papeleta ${papeletaActualizada.numero} fue observada. Comentario: ${comentario}`
     );
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en observarPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -592,35 +881,56 @@ export async function observarPapeleta(req: Request, res: Response): Promise<voi
  * PUT /api/papeletas/:id/cancelar
  * Solo el solicitante. Permitido desde PENDIENTE u OBSERVADO → CANCELADO.
  */
-export async function cancelarPapeleta(req: Request, res: Response): Promise<void> {
+export async function cancelarPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.solicitanteId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el solicitante puede cancelar esta papeleta' });
+      res.status(403).json({
+        mensaje: 'Solo el solicitante puede cancelar esta papeleta',
+      });
       return;
     }
 
-    if (papeleta.estado !== EstadoPapeleta.PENDIENTE && papeleta.estado !== EstadoPapeleta.OBSERVADO) {
-      res.status(409).json({ mensaje: `No se puede cancelar: la papeleta está en estado ${papeleta.estado}` });
+    if (
+      papeleta.estado !== EstadoPapeleta.PENDIENTE &&
+      papeleta.estado !== EstadoPapeleta.OBSERVADO
+    ) {
+      res.status(409).json({
+        mensaje: `No se puede cancelar: la papeleta está en estado ${papeleta.estado}`,
+      });
       return;
     }
 
@@ -629,10 +939,14 @@ export async function cancelarPapeleta(req: Request, res: Response): Promise<voi
       data: { estado: EstadoPapeleta.CANCELADO },
     });
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en cancelarPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }
 
@@ -641,43 +955,65 @@ export async function cancelarPapeleta(req: Request, res: Response): Promise<voi
  * Solo el solicitante, cuando el estado es OBSERVADO. Actualiza los campos
  * editables, vuelve a PENDIENTE y mantiene el mismo número.
  */
-export async function reenviarPapeleta(req: Request, res: Response): Promise<void> {
+export async function reenviarPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
   try {
     const id = Number(req.params.id);
+
     if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
+      res.status(400).json({
+        mensaje: 'El id proporcionado no es válido',
+      });
       return;
     }
 
     const usuarioToken = req.usuario;
+
     if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
+      res.status(401).json({
+        mensaje: 'No autenticado',
+      });
       return;
     }
 
-    let papeleta = await prisma.papeleta.findUnique({ where: { id } });
+    let papeleta = await prisma.papeleta.findUnique({
+      where: { id },
+    });
+
     if (!papeleta) {
-      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      res.status(404).json({
+        mensaje: 'Papeleta no encontrada',
+      });
       return;
     }
 
     papeleta = await revertirSiExpiro(papeleta);
 
     if (papeleta.solicitanteId !== usuarioToken.id) {
-      res.status(403).json({ mensaje: 'Solo el solicitante puede reenviar esta papeleta' });
+      res.status(403).json({
+        mensaje: 'Solo el solicitante puede reenviar esta papeleta',
+      });
       return;
     }
 
     if (papeleta.estado !== EstadoPapeleta.OBSERVADO) {
       res.status(409).json({
-        mensaje: `No se puede reenviar: la papeleta debe estar OBSERVADO (estado actual: ${papeleta.estado})`,
+        mensaje:
+          `No se puede reenviar: la papeleta debe estar OBSERVADO (estado actual: ${papeleta.estado})`,
       });
       return;
     }
 
-    const resultado = validarCamposPapeleta(req.body as CamposPapeletaInput);
+    const resultado = validarCamposPapeleta(
+      req.body as CamposPapeletaInput
+    );
+
     if (!resultado.ok) {
-      res.status(400).json({ mensaje: resultado.mensaje });
+      res.status(400).json({
+        mensaje: resultado.mensaje,
+      });
       return;
     }
 
@@ -698,9 +1034,13 @@ export async function reenviarPapeleta(req: Request, res: Response): Promise<voi
       },
     });
 
-    res.status(200).json({ papeleta: papeletaActualizada });
+    res.status(200).json({
+      papeleta: papeletaActualizada,
+    });
   } catch (error) {
     console.error('Error en reenviarPapeleta:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    res.status(500).json({
+      mensaje: 'Error interno del servidor',
+    });
   }
 }

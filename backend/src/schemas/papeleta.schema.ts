@@ -18,8 +18,34 @@ const fechaSchema = z
   .refine(
     (valor) =>
       /^\d{4}-\d{2}-\d{2}$/.test(valor) ||
-      !Number.isNaN(new Date(valor).getTime()),
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(valor),
+    'La fecha debe tener el formato YYYY-MM-DD o ISO 8601 UTC',
+  )
+  .refine(
+    (valor) => {
+      const fechaParte = valor.slice(0, 10);
+
+      const [anio, mes, dia] = fechaParte.split('-').map(Number);
+
+      const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+
+      return (
+        fecha.getUTCFullYear() === anio &&
+        fecha.getUTCMonth() === mes - 1 &&
+        fecha.getUTCDate() === dia
+      );
+    },
     'La fecha no es válida',
+  )
+  .refine(
+    (valor) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+        return true;
+      }
+
+      return !Number.isNaN(new Date(valor).getTime());
+    },
+    'La fecha u hora no es válida',
   );
 
 const fechaHoraSchema = z
