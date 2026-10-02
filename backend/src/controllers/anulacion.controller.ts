@@ -8,10 +8,19 @@ import prisma from '../utils/prisma';
 import { puedeAnular } from '../services/anulacion.service';
 import { liberarBloqueoPapeleta } from '../services/bloqueos.service';
 import { notificar } from '../services/notificacion.service';
+import { esAprobadorVigente } from '../services/papeleta.service';
+import { usuarioPuedeVerPapeleta } from '../services/visibilidadPapeletas.service';
+
+/**
+ * Roles que, por su función operativa (control de puerta), necesitan poder
+ * verificar el token de la papeleta de cualquier trabajador. El resto de
+ * roles queda limitado por el servicio de visibilidad organizacional.
+ */
+const ROLES_VERIFICADORES_TOKEN: Rol[] = [Rol.VIGILANTE, Rol.RRHH, Rol.ADMIN];
 
 /**
  * PUT /api/papeletas/:id/anular
- * Solo el aprobador de la papeleta o un Admin. La papeleta debe estar
+ * Solo el aprobador VIGENTE de la papeleta o un Admin. La papeleta debe estar
  * APROBADO o ANULACION_SOLICITADA. Aplica la ventana temporal flexible
  * (salvo para Admin) y exige motivoAnulacion.
  */
@@ -42,10 +51,17 @@ export async function anularPapeleta(req: Request, res: Response): Promise<void>
     }
 
     const esAdmin = usuarioToken.rol === Rol.ADMIN;
-    const esAprobador = papeleta.aprobadorId === usuarioToken.id;
+    const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
+
+    // Autorización viva (A-04): el aprobador asignado solo puede anular si
+    // sigue siendo el aprobador VIGENTE del solicitante según la jerarquía
+    // actual. Un aprobador obsoleto (tras cambio de jefe/rol) queda excluido.
+    const esAprobador =
+      esAprobadorAsignado &&
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
 
     if (!esAdmin && !esAprobador) {
-      res.status(403).json({ mensaje: 'Solo el aprobador de la papeleta o un administrador pueden anularla' });
+      res.status(403).json({ mensaje: 'Solo el aprobador vigente de la papeleta o un administrador pueden anularla' });
       return;
     }
 
@@ -194,8 +210,11 @@ export async function cancelarSolicitudAnulacion(req: Request, res: Response): P
 
 /**
  * POST /api/papeletas/verificar-token
- * Cualquier usuario autenticado. No cambia el estado de la papeleta;
- * solo registra la consulta en TokenVerificacion.
+ * Requiere autenticación. Solo puede verificar la papeleta quien esté
+ * autorizado a verla: los roles operativos de verificación
+ * (VIGILANTE/RRHH/ADMIN) o cualquier rol cuyo alcance de visibilidad
+ * organizacional incluya al solicitante. No cambia el estado de la
+ * papeleta; solo registra la consulta en TokenVerificacion.
  */
 export async function verificarToken(req: Request, res: Response): Promise<void> {
   try {
@@ -223,6 +242,34 @@ export async function verificarToken(req: Request, res: Response): Promise<void>
       return;
     }
 
+    // Autorización de lectura (A-01): se aplica el servicio de visibilidad.
+    // Los roles con función operativa de verificación (VIGILANTE/RRHH/ADMIN)
+    // pueden verificar cualquier papeleta; el resto solo las que ya puede ver.
+    const esVerificador = ROLES_VERIFICADORES_TOKEN.includes(usuarioToken.rol);
+    const puedeVer =
+      esVerificador ||
+      (await usuarioPuedeVerPapeleta(usuarioToken, papeleta.solicitanteId));
+
+    if (!puedeVer) {
+      res.status(403).json({
+        mensaje: 'No tiene permisos para verificar esta papeleta',
+      });
+      return;
+    }
+
+    // Vigencia operativa: los tokens de papeletas ANULADAS o CANCELADAS ya no
+    // deben considerarse válidos.
+    if (
+      papeleta.estado === EstadoPapeleta.ANULADO ||
+      papeleta.estado === EstadoPapeleta.CANCELADO
+    ) {
+      res.status(200).json({
+        valido: false,
+        mensaje: 'La papeleta ya no está vigente',
+      });
+      return;
+    }
+
     await prisma.tokenVerificacion.create({
       data: {
         token,
@@ -243,7 +290,6 @@ export async function verificarToken(req: Request, res: Response): Promise<void>
         horaSalida: papeleta.horaSalida,
         horaRetorno: papeleta.horaRetorno,
         estado: papeleta.estado,
-        token: papeleta.token,
       },
     });
   } catch (error) {

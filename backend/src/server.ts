@@ -106,6 +106,7 @@ io.use(async (socket: Socket, next) => {
       id: usuario.id,
       email: usuario.email,
       rol: usuario.rol,
+      cambioPassword: usuario.cambioPassword,
       ...(payload.requiereCambioPassword === true
         ? { requiereCambioPassword: true }
         : {}),

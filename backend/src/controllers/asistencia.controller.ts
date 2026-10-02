@@ -95,6 +95,16 @@ export async function registrarMovimiento(req: Request, res: Response): Promise<
 
     const fechaMovimiento = new Date(timestamp);
 
+    // B-04: la marca de tiempo no puede ser retroactiva ni futura en exceso,
+    // acotándola a ±1 día respecto a la fecha actual del servidor.
+    const MILISEGUNDOS_DIA = 24 * 60 * 60 * 1000;
+    if (Math.abs(Date.now() - fechaMovimiento.getTime()) > MILISEGUNDOS_DIA) {
+      res.status(400).json({
+        mensaje: 'El timestamp debe estar dentro de ±1 día respecto a la fecha actual del servidor',
+      });
+      return;
+    }
+
     const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
 
     if (!usuario) {

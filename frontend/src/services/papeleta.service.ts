@@ -35,7 +35,6 @@ export interface ResultadoVerificarToken {
     horaSalida: string | null;
     horaRetorno: string | null;
     estado: EstadoPapeleta;
-    token: string | null;
   };
 }
 

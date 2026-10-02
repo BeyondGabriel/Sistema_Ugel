@@ -38,6 +38,7 @@ router.post(
 router.get(
   '/exportar',
   authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH', 'ESPECIALISTA', 'JEFE', 'DIRECTORA'),
   validate(listarVisitasQuerySchema, 'query'),
   exportarVisitas,
 );
@@ -45,6 +46,7 @@ router.get(
 router.get(
   '/',
   authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH', 'ESPECIALISTA', 'JEFE', 'DIRECTORA'),
   validate(listarVisitasQuerySchema, 'query'),
   listarVisitas,
 );
@@ -52,6 +54,7 @@ router.get(
 router.get(
   '/:id',
   authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH', 'ESPECIALISTA', 'JEFE', 'DIRECTORA'),
   validate(visitaIdParamsSchema, 'params'),
   obtenerVisita,
 );

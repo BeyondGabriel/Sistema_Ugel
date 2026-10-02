@@ -11,7 +11,7 @@ import {
 } from '../controllers/auth.controller';
 
 import { authJWT } from '../middlewares/authJWT';
-import { rateLimitLogin } from '../middlewares/rateLimit';
+import { rateLimitLogin, rateLimitCambiarPassword } from '../middlewares/rateLimit';
 import { validate } from '../middlewares/validate';
 
 import {
@@ -30,6 +30,7 @@ router.post(
 
 router.post(
   '/cambiar-password',
+  rateLimitCambiarPassword,
   authJWT,
   validate(cambiarPasswordSchema, 'body'),
   cambiarPassword,

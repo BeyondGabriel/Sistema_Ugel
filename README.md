@@ -27,6 +27,7 @@ SIGPER centraliza la gestión de:
 - [Características](#características)
 - [Roles](#roles)
 - [Arquitectura](#arquitectura)
+- [Autorización (Punto 5)](#autorización-punto-5)
 - [Stack tecnológico](#stack-tecnológico)
 - [Requisitos](#requisitos)
 - [Instalación](#instalación)
@@ -55,7 +56,7 @@ SIGPER centraliza la gestión de:
 - [Scripts disponibles](#scripts-disponibles)
 - [Cambios recientes](#cambios-recientes)
 - [Estado de los puntos críticos](#estado-de-los-puntos-críticos)
-- [Hallazgos de seguridad pendientes](#hallazgos-de-seguridad-pendientes)
+- [Hallazgos transferidos al Punto 6](#hallazgos-transferidos-al-punto-6)
 - [Consideraciones actuales](#consideraciones-actuales)
 - [Licencia](#licencia)
 
@@ -200,6 +201,43 @@ Utiliza:
 - Tailwind CSS para estilos;
 - Headless UI y Heroicons para componentes e interfaz.
 
+## Autorización (Punto 5)
+
+El control de acceso opera de forma **viva de extremo a extremo**: el rol y el estado del usuario se leen de la base de datos en cada petición y la jerarquía de aprobación se revalida en caliente.
+
+```text
+[Usuario autenticado]
+        │  Bearer <JWT>
+        ▼
+[authJWT]                 Verificación de firma/expiración del JWT +
+                          consulta en BD en tiempo real (existe y activo).
+                          Fija req.usuario.rol desde la fila ACTUAL.
+        ▼
+[exigirCambioPassword]    Guard de contraseña obligatoria: bloquea (403)
+                          todo salvo POST /api/auth/cambiar-password y
+                          GET /api/auth/mi-perfil mientras cambioPassword.
+        ▼
+[checkRole(...)]          Middleware de ruta: exige que el rol ACTUAL
+                          esté en la lista permitida.
+        ▼
+[Controlador]             Validación a nivel de recurso (IDOR/BOLA) y
+                          jerarquía VIVA vía esAprobadorVigente() /
+                          usuarioPuedeVerPapeleta().
+        ▼
+[Prisma / MySQL]          Persistencia (solo si la autorización concede).
+```
+
+Componentes clave de la cadena:
+
+| Componente | Archivo | Rol en la cadena |
+|---|---|---|
+| `authJWT` | `backend/src/middlewares/authJWT.ts` | Verifica el JWT y resuelve rol/estado **en BD** por petición. |
+| `exigirCambioPassword` | `backend/src/middlewares/exigirCambioPassword.ts` | Restringe el alcance del token temporal de primer ingreso. |
+| `checkRole` | `backend/src/middlewares/checkRole.ts` | Autorización por rol a nivel de ruta. |
+| `esAprobadorVigente` | `backend/src/services/papeleta.service.ts` | Revalida la jerarquía actual (aprobador vigente) en las transiciones. |
+| `usuarioPuedeVerPapeleta` | `backend/src/services/visibilidadPapeletas.service.ts` | Visibilidad organizacional centralizada (lectura de papeletas y PDF). |
+| `contarAdminsActivos` / `validarJefeAsignable` | `backend/src/controllers/usuario.controller.ts` | Salvaguardas de administración y de integridad jerárquica. |
+
 ---
 
 # Stack tecnológico
@@ -215,6 +253,7 @@ Utiliza:
 | Hash de contraseñas | bcryptjs | `^2.4.3` |
 | Tiempo real | Socket.IO | `^4.7.5` |
 | Rate limiting | express-rate-limit | `^8.7.0` |
+| Seguridad HTTP | helmet | `^8.3.0` |
 | Validación | Zod | `^4.6.4` |
 | Reportes | ExcelJS | `^4.4.0` |
 | PDF | PDFKit | `^0.15.0` |
@@ -657,7 +696,7 @@ svgUrl
 
 El esquema `webhookFirmaSchema` valida la **estructura** (`papeletaId`, `svgUrl`) y además el **contenido** de `svgUrl`: exige protocolo `https` y, cuando `SUPABASE_URL` está configurado, que el host corresponda al dominio de almacenamiento permitido o a un subdominio suyo. Los esquemas inseguros (`javascript:`, `data:`, `file:`, `http:`) se rechazan.
 
-La seguridad del secreto compartido `x-webhook-secret` (comparación en tiempo constante, rate limiting y firma/anti-replay) se mantiene como una preocupación independiente del Punto 6; ver la sección *Hallazgos de seguridad pendientes*.
+En el Punto 5 se implementó la **comparación del secreto en tiempo constante** (`crypto.timingSafeEqual`) y el bloqueo de firma en papeletas `ANULADO`/`CANCELADO`. El endurecimiento remanente del webhook (**rate limiting**, **firma HMAC del cuerpo** y **`timestamp`/`nonce` anti-replay**) se mantiene como preocupación independiente del Punto 6; ver la sección *Hallazgos transferidos al Punto 6*.
 
 ### Estado de módulos verificados
 
@@ -675,6 +714,17 @@ Durante la auditoría del Punto 4 se revisaron las rutas de entrada de los sigui
 | Firma externa (`firmas/webhook`) | `body` | ✅ Blindado (estructura + contenido) |
 
 Nota de alcance: las rutas de todos estos módulos ya están validadas por `validate()` y sus esquemas rechazan entradas inválidas con HTTP `400`. La depuración de código muerto se aplicó sobre los controladores revisados; algunos manejadores auxiliares (por ejemplo, las rutas de anulación y de PDF bajo `papeletas`, y las exportaciones de reportes) todavía conservan comprobaciones manuales redundantes que el middleware ya cubre.
+
+### Estado de módulos blindados (Punto 5)
+
+La auditoría del **Punto 5 (Roles y Autorización)** verificó el control de acceso **a nivel de recurso** de cada módulo. Matriz de cierre:
+
+| Módulo | Estado | Evidencia de blindaje |
+|---|---|---|
+| **Auth** | ✅ Blindado | Login unificado con `401` genérico (anti-enumeración de cuentas) y **rate limiting** acoplado a `cambiar-password`. Guard `exigirCambioPassword` sobre el token temporal de primer ingreso. |
+| **Usuarios** | ✅ Blindado | Helper de salvaguarda que impide dejar **0 ADMINs activos**; restricciones a **RRHH** (no crear `ADMIN`, no asignar `jefeId`) para impedir escaladas de privilegios; validación **anti-self / jefe-inactivo** en jefaturas; **proyección mínima selectiva** para el rol **VIGILANTE** (PII protegida). |
+| **Papeletas y Visibilidad** | ✅ Blindado | Eliminación del **oráculo de tokens** en `verificar-token` (servicio de visibilidad combinado con roles verificadores), sin eco del token y con filtrado de estados no vigentes; **validación dinámica de aprobadores vigentes** (`esAprobadorVigente`) en `revisar/aprobar/rechazar/observar/anular`; **DRY** aplicado en la generación de PDF. |
+| **Asistencias y Visitas** | ✅ Blindado | `checkRole` inyectado en las lecturas como **defensa en profundidad estructural**; guardia temporal de **±1 día** en los registros de portería; control estricto a nivel de recurso (`esAdmin \|\| registradorId`) en la marcación de gafetes. |
 
 ---
 
@@ -1543,6 +1593,18 @@ Se realizaron pruebas funcionales sobre:
 
 Los módulos principales continuaron funcionando con datos válidos después de la integración de la validación.
 
+## Punto 5 — Roles y autorización
+
+Se auditaron los tres bloques (**Auth/Usuarios/Jefaturas**, **Papeletas/Visibilidad** y **Asistencias/Visitas/Webhook**) y se corrigieron **18 hallazgos** (1 Crítico, 4 Altos, 9 Medios y 8 Bajos), con 3 transferidos al Punto 6. La compilación del backend se mantiene limpia en `EXITCODE = 0`.
+
+Correcciones principales:
+
+- **Autenticación:** `authJWT` expone `cambioPassword` y un guard global `exigirCambioPassword` restringe el token temporal a `cambiar-password` y `mi-perfil`; `login` responde con `401` genérico; rate limiting en `cambiar-password`; `helmet` + `express.json({ limit: '100kb' })`.
+- **Usuarios:** salvaguarda del **último ADMIN activo**, prohibición de crear `ADMIN` desde **RRHH**, `jefeId` reservado a **ADMIN**, validación anti-self/jefe-inactivo y **proyección mínima para VIGILANTE**.
+- **Papeletas:** `verificar-token` deja de ser un oráculo BOLA (visibilidad + roles verificadores, sin eco del token, sin estados no vigentes) y las transiciones usan **jerarquía viva** (`esAprobadorVigente`); PDF centralizado.
+- **Asistencias/Visitas:** `checkRole` en lecturas, guardia temporal de **±1 día** y control de recurso en `marcarGafete`.
+- **Webhook de firma:** comparación del secreto en **tiempo constante** (`crypto.timingSafeEqual`) y bloqueo de firma en estados `ANULADO`/`CANCELADO`.
+
 ---
 
 # Estado de los puntos críticos
@@ -1553,20 +1615,26 @@ Los módulos principales continuaron funcionando con datos válidos después de 
 | 2 | Restricción de CORS | ✅ Implementado y probado |
 | 3 | Rate limiting | ✅ Implementado y probado |
 | 4 | Validación estructurada de entradas | ✅ Implementado y probado |
-| 5 | Revisión de roles y autorización | ⏳ Pendiente |
-| 6 | Seguridad del webhook de firma externa | ⏳ Pendiente |
+| 5 | Revisión de roles y autorización | ✅ Implementado y probado |
+| 6 | Endurecimiento del webhook de firma y revocación de sesiones | ⏳ Pendiente |
 
 ---
 
-# Hallazgos de seguridad pendientes
+# Hallazgos transferidos al Punto 6
 
-Los siguientes hallazgos corresponden a la **seguridad del Webhook de firma externa** (`POST /api/firmas/webhook`) y quedan **fuera del alcance del Punto 4** (validación estructural de entradas). Se registran para su tratamiento en el **Punto 6**:
+El **Punto 5 — Roles y Autorización** resolvió la mayoría de los hallazgos de su alcance. Los siguientes se delegan **intencionalmente** al **Punto 6 — Endurecimiento de Seguridad** para preservar el modelo relacional actual de Prisma (evitar migraciones de esquema):
 
-- **H1 — Comparación no resistente a ataques de temporización (timing attack):** el secreto del header `x-webhook-secret` se compara con `!==` (comparación de cadenas no constante). Debe reemplazarse por una comparación en tiempo constante (por ejemplo, `crypto.timingSafeEqual`).
-- **H2 — Ausencia de rate limiting en el webhook:** a diferencia de `POST /api/auth/login` y `POST /api/papeletas/verificar-token`, la ruta del webhook no tiene limitador, lo que permite intentos masivos de adivinación del secreto compartido.
-- **H3 — Autenticación basada solo en secreto estático (sin HMAC ni anti-replay):** no se valida una firma HMAC del cuerpo ni un timestamp/nonce, por lo que un secreto filtrado permitiría reutilizar o repetir peticiones.
+- **H-07 — Revocación instantánea de sesiones:** inferencia de `tokenVersion` / `passwordChangedAt` en el modelo Prisma para invalidar tokens vigentes al cambiar la contraseña o al requerir el cierre inmediato de sesiones.
+- **B-01 (Remanentes) — Endurecimiento criptográfico del Webhook de firma:** firmas **HMAC** del cuerpo, **`timestamp`/`nonce` anti-replay** y **rate limiting** en `POST /api/firmas/webhook`. *(La comparación del secreto en tiempo constante ya se implementó en el Punto 5.)*
+- **B-03 (Remanentes) — Auditoría de autor en Asistencias:** inyección de `registradoPorId` / `editadoPorId` en el modelo `Movimiento` (requiere migración de esquema Prisma).
 
-> El mecanismo de autenticación por `x-webhook-secret` **sí existe**; H1–H3 son tareas de endurecimiento y se atenderán en el Punto 6.
+Antecedentes del webhook (dominio original del Punto 6):
+
+- **H1 — ~~Comparación no resistente a ataques de temporización~~ → [RESUELTO en Punto 5]:** el secreto del header `x-webhook-secret` se compara ahora con `crypto.timingSafeEqual` (tiempo constante).
+- **H2 — Ausencia de rate limiting en el webhook:** a diferencia de `POST /api/auth/login` y `POST /api/papeletas/verificar-token`, la ruta del webhook todavía no tiene limitador. **Transferido al Punto 6.**
+- **H3 — Autenticación basada solo en secreto estático (sin HMAC ni anti-replay):** no se valida una firma HMAC del cuerpo ni un `timestamp`/`nonce`. **Transferido al Punto 6.**
+
+> El mecanismo de autenticación por `x-webhook-secret` existe y ya usa comparación en tiempo constante; H2–H3, H-07 y los remanentes de B-01/B-03 se atenderán en el Punto 6.
 
 ---
 
@@ -1600,7 +1668,7 @@ El sistema registra consultas de tokens, pero una bitácora completa de todas la
 
 ## Webhook de firma externa
 
-El webhook estructuralmente validado pertenece al Punto 4, pero su endurecimiento criptográfico y de autenticación continúa contemplado en el Punto 6.
+El webhook pertenece al Punto 4 por su validación estructural. En el Punto 5 se añadió la **comparación del secreto en tiempo constante** (`crypto.timingSafeEqual`) y el bloqueo de firma en estados no vigentes; el endurecimiento restante (**HMAC**, **anti-replay** y **rate limiting**) continúa contemplado en el Punto 6.
 
 ## Pruebas automatizadas
 
@@ -1635,6 +1703,9 @@ Rate limiting              ✓
 Validación con Zod         ✓
 CORS restringido            ✓
 Revalidación de JWT        ✓
+Autorización por roles (P5) ✓
+Guard de cambio de contraseña ✓
+Cabeceras seguras (helmet) ✓
 ```
 
 ---

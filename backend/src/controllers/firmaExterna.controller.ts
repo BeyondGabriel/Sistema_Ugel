@@ -3,15 +3,33 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { z } from 'zod';
+import { EstadoPapeleta } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { webhookFirmaSchema } from '../schemas/firmaExterna.schema';
 
 /**
+ * Compara dos cadenas en tiempo constante (B-01). `crypto.timingSafeEqual`
+ * exige buffers de igual longitud; si difieren, el secreto ya no puede ser
+ * válido y se descarta sin convertirlo en error.
+ */
+function compararSecretosTiempoConstante(recibido: string, esperado: string): boolean {
+  const bufferRecibido = Buffer.from(recibido, 'utf8');
+  const bufferEsperado = Buffer.from(esperado, 'utf8');
+
+  if (bufferRecibido.length !== bufferEsperado.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(bufferRecibido, bufferEsperado);
+}
+
+/**
  * POST /api/firmas/webhook
  * No usa authJWT: la seguridad la da el header x-webhook-secret, que solo
- * Supabase (o quien dispare el webhook) conoce. La papeleta solo necesita
- * existir; la firma puede adjuntarse sin importar su estado actual.
+ * Supabase (o quien dispare el webhook) conoce. Solo se permite registrar la
+ * firma en papeletas vigentes (no ANULADO ni CANCELADO).
  */
 export async function webhookFirma(req: Request, res: Response): Promise<void> {
   try {
@@ -24,7 +42,8 @@ export async function webhookFirma(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if (!secretRecibido || secretRecibido !== secretEsperado) {
+    // B-01: comparación en tiempo constante (evita fuga por temporización).
+    if (!secretRecibido || !compararSecretosTiempoConstante(secretRecibido, secretEsperado)) {
       res.status(401).json({ mensaje: 'Clave de webhook inválida' });
       return;
     }
@@ -35,6 +54,17 @@ export async function webhookFirma(req: Request, res: Response): Promise<void> {
     const papeleta = await prisma.papeleta.findUnique({ where: { id: papeletaId } });
     if (!papeleta) {
       res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      return;
+    }
+
+    // B-01: comprobación de negocio: no se firma una papeleta ya invalidada.
+    if (
+      papeleta.estado === EstadoPapeleta.ANULADO ||
+      papeleta.estado === EstadoPapeleta.CANCELADO
+    ) {
+      res.status(409).json({
+        mensaje: `No se puede registrar la firma: la papeleta está en estado ${papeleta.estado}`,
+      });
       return;
     }
 

@@ -40,6 +40,43 @@ function omitirPassword<T extends { password: string }>(usuario: T): Omit<T, 'pa
   return resto;
 }
 
+/** Cuenta los administradores ACTIVOS del sistema (opcionalmente excluyendo un id). */
+async function contarAdminsActivos(idExcluir?: number): Promise<number> {
+  return prisma.usuario.count({
+    where: {
+      rol: Rol.ADMIN,
+      activo: true,
+      ...(idExcluir !== undefined ? { id: { not: idExcluir } } : {}),
+    },
+  });
+}
+
+/**
+ * Valida la coherencia de un `jefeId` (H-04): no puede ser el propio usuario
+ * (auto-jefe) y el jefe debe existir, tener rol JEFE/DIRECTORA y estar activo.
+ * Devuelve el mensaje de error o `null` si la asignación es válida.
+ */
+async function validarJefeAsignable(
+  jefeId: number,
+  usuarioId?: number,
+): Promise<string | null> {
+  if (usuarioId !== undefined && jefeId === usuarioId) {
+    return 'Un usuario no puede ser su propio jefe';
+  }
+
+  const jefe = await prisma.usuario.findUnique({ where: { id: jefeId } });
+
+  if (!jefe || (jefe.rol !== Rol.JEFE && jefe.rol !== Rol.DIRECTORA)) {
+    return 'El jefe asignado debe ser un usuario con rol JEFE o DIRECTORA';
+  }
+
+  if (!jefe.activo) {
+    return 'El jefe asignado debe estar activo';
+  }
+
+  return null;
+}
+
 /**
  * POST /api/usuarios
  * Solo Admin o RRHH. Crea un nuevo usuario.
@@ -56,6 +93,24 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
       jefeId,
     } = req.body as z.infer<typeof crearUsuarioSchema>;
 
+    // H-03 / H-05: el rol RRHH no puede emitir cuentas ADMIN (evita la
+    // escalada de privilegios indirecta). Solo un ADMIN puede crear ADMIN.
+    if (req.usuario?.rol === Rol.RRHH && rol === Rol.ADMIN) {
+      res.status(403).json({
+        mensaje: 'El rol RRHH no puede crear usuarios con rol ADMIN',
+      });
+      return;
+    }
+
+    // H-05: la asignación de jefe inmediato queda reservada al ADMIN,
+    // alineando la creación con la política de POST /api/usuarios/asignar-jefe.
+    if (jefeId !== undefined && jefeId !== null && req.usuario?.rol !== Rol.ADMIN) {
+      res.status(403).json({
+        mensaje: 'Solo un administrador puede asignar el jefe inmediato',
+      });
+      return;
+    }
+
     const emailExistente = await prisma.usuario.findUnique({ where: { email } });
     if (emailExistente) {
       res.status(409).json({ mensaje: 'Ya existe un usuario registrado con ese correo electrónico' });
@@ -63,9 +118,9 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
     }
 
     if (jefeId !== undefined && jefeId !== null) {
-      const jefe = await prisma.usuario.findUnique({ where: { id: jefeId } });
-      if (!jefe || (jefe.rol !== Rol.JEFE && jefe.rol !== Rol.DIRECTORA)) {
-        res.status(400).json({ mensaje: 'El jefe asignado debe ser un usuario con rol JEFE o DIRECTORA' });
+      const errorJefe = await validarJefeAsignable(jefeId);
+      if (errorJefe) {
+        res.status(400).json({ mensaje: errorJefe });
         return;
       }
     }
@@ -176,9 +231,9 @@ export async function editarUsuario(req: Request, res: Response): Promise<void> 
     }
 
     if (jefeId !== undefined && jefeId !== null) {
-      const jefe = await prisma.usuario.findUnique({ where: { id: jefeId } });
-      if (!jefe || (jefe.rol !== Rol.JEFE && jefe.rol !== Rol.DIRECTORA)) {
-        res.status(400).json({ mensaje: 'El jefe asignado debe ser un usuario con rol JEFE o DIRECTORA' });
+      const errorJefe = await validarJefeAsignable(jefeId, id);
+      if (errorJefe) {
+        res.status(400).json({ mensaje: errorJefe });
         return;
       }
     }
@@ -193,6 +248,21 @@ export async function editarUsuario(req: Request, res: Response): Promise<void> 
 
     const rolFinal = rol ?? usuarioActual.rol;
     const activoFinal = activo ?? usuarioActual.activo;
+
+    // H-02: impedir que el último administrador ACTIVO se auto-degrade de rol
+    // o quede inactivo, dejando al sistema sin ningún ADMIN activo.
+    if (usuarioActual.rol === Rol.ADMIN && usuarioActual.activo) {
+      const sigueSiendoAdminActivo =
+        rolFinal === Rol.ADMIN && activoFinal === true;
+
+      if (!sigueSiendoAdminActivo && (await contarAdminsActivos(id)) === 0) {
+        res.status(409).json({
+          mensaje:
+            'No es posible degradar o desactivar al único administrador activo del sistema. Cree otro administrador antes de continuar.',
+        });
+        return;
+      }
+    }
 
     // Regla de roles únicos: si tras la edición el usuario queda activo con un
     // rol único, no debe existir ya otro usuario activo con ese mismo rol.
@@ -265,16 +335,14 @@ export async function desactivarUsuario(req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Evita que el sistema quede sin ningún Admin (activo o inactivo)
+    // H-02: no permitir dejar al sistema sin ningún ADMIN activo.
     if (usuario.rol === Rol.ADMIN) {
-      const otrosAdmins = await prisma.usuario.count({
-        where: { rol: Rol.ADMIN, id: { not: id } },
-      });
+      const otrosAdminsActivos = await contarAdminsActivos(id);
 
-      if (otrosAdmins === 0) {
+      if (otrosAdminsActivos === 0) {
         res.status(409).json({
           mensaje:
-            'No es posible desactivar al único administrador del sistema. Cree otro administrador antes de continuar.',
+            'No es posible desactivar al único administrador activo del sistema. Cree otro administrador antes de continuar.',
         });
         return;
       }
@@ -348,6 +416,25 @@ export async function listarUsuarios(req: Request, res: Response): Promise<void>
     // Por defecto solo se listan usuarios activos, salvo que se indique lo contrario
     where.activo = activo !== undefined ? activo === 'true' : true;
 
+    // H-06: el rol VIGILANTE solo recibe una proyección mínima (sin email ni
+    // estado estructural), evitando la exposición del directorio completo.
+    if (req.usuario?.rol === Rol.VIGILANTE) {
+      const usuarios = await prisma.usuario.findMany({
+        where,
+        select: {
+          id: true,
+          nombres: true,
+          apellidos: true,
+          rol: true,
+          jefatura: { select: { id: true, nombre: true } },
+        },
+        orderBy: { apellidos: 'asc' },
+      });
+
+      res.status(200).json({ usuarios });
+      return;
+    }
+
     const usuarios = await prisma.usuario.findMany({
       where,
       include: {
@@ -410,6 +497,11 @@ export async function asignarJefe(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    if (usuarioId === jefeId) {
+      res.status(400).json({ mensaje: 'Un usuario no puede ser su propio jefe' });
+      return;
+    }
+
     const jefe = await prisma.usuario.findUnique({ where: { id: jefeId } });
 
     if (!jefe) {
@@ -419,6 +511,11 @@ export async function asignarJefe(req: Request, res: Response): Promise<void> {
 
     if (jefe.rol !== Rol.JEFE && jefe.rol !== Rol.DIRECTORA) {
       res.status(400).json({ mensaje: 'El usuario asignado como jefe debe tener rol JEFE o DIRECTORA' });
+      return;
+    }
+
+    if (!jefe.activo) {
+      res.status(400).json({ mensaje: 'El jefe asignado debe estar activo' });
       return;
     }
 

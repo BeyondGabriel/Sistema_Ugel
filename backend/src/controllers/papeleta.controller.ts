@@ -13,6 +13,7 @@ import {
   AprobadorNoEncontradoError,
   aplicarBloqueos,
   revertirSiExpiro,
+  esAprobadorVigente,
 } from '../services/papeleta.service';
 import { notificar } from '../services/notificacion.service';
 import { parseFechaLocal } from '../utils/fechas';
@@ -289,10 +290,17 @@ export async function iniciarRevision(
 
     papeleta = await revertirSiExpiro(papeleta);
 
-    if (papeleta.aprobadorId !== usuarioToken.id) {
+    // Autorización viva (A-02): el aprobador asignado debe seguir siendo el
+    // aprobador VIGENTE del solicitante según la jerarquía actual.
+    const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
+    const sigueSiendoAprobador =
+      esAprobadorAsignado &&
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+
+    if (!sigueSiendoAprobador) {
       res.status(403).json({
         mensaje:
-          'Solo el aprobador asignado puede iniciar la revisión de esta papeleta',
+          'Solo el aprobador vigente puede iniciar la revisión de esta papeleta',
       });
       return;
     }
@@ -357,9 +365,17 @@ export async function aprobarPapeleta(
 
     papeleta = await revertirSiExpiro(papeleta);
 
-    if (papeleta.aprobadorId !== usuarioToken.id) {
+    // Autorización viva (A-02): además de ser el aprobador asignado, el usuario
+    // debe seguir siendo el aprobador VIGENTE del solicitante según la
+    // jerarquía actual en la base de datos.
+    const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
+    const sigueSiendoAprobador =
+      esAprobadorAsignado &&
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+
+    if (!sigueSiendoAprobador) {
       res.status(403).json({
-        mensaje: 'Solo el aprobador asignado puede aprobar esta papeleta',
+        mensaje: 'Solo el aprobador vigente puede aprobar esta papeleta',
       });
       return;
     }
@@ -435,10 +451,16 @@ export async function rechazarPapeleta(
 
     papeleta = await revertirSiExpiro(papeleta);
 
-    if (papeleta.aprobadorId !== usuarioToken.id) {
+    // Autorización viva (A-02): el aprobador asignado debe seguir siendo el
+    // aprobador vigente del solicitante.
+    const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
+    const sigueSiendoAprobador =
+      esAprobadorAsignado &&
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+
+    if (!sigueSiendoAprobador) {
       res.status(403).json({
-        mensaje:
-          'Solo el aprobador asignado puede rechazar esta papeleta',
+        mensaje: 'Solo el aprobador vigente puede rechazar esta papeleta',
       });
       return;
     }
@@ -510,10 +532,16 @@ export async function observarPapeleta(
 
     papeleta = await revertirSiExpiro(papeleta);
 
-    if (papeleta.aprobadorId !== usuarioToken.id) {
+    // Autorización viva (A-02): el aprobador asignado debe seguir siendo el
+    // aprobador vigente del solicitante.
+    const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
+    const sigueSiendoAprobador =
+      esAprobadorAsignado &&
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+
+    if (!sigueSiendoAprobador) {
       res.status(403).json({
-        mensaje:
-          'Solo el aprobador asignado puede observar esta papeleta',
+        mensaje: 'Solo el aprobador vigente puede observar esta papeleta',
       });
       return;
     }

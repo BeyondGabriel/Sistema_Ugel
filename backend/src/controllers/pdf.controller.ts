@@ -3,9 +3,11 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
 import { generarPDFPapeleta } from '../services/pdf.service';
-import { obtenerIdsVisibles } from '../services/visibilidadPapeletas.service';
+import { usuarioPuedeVerPapeleta } from '../services/visibilidadPapeletas.service';
+import { papeletaIdParamsSchema } from '../schemas/papeleta.schema';
 
 /**
  * GET /api/papeletas/:id/pdf
@@ -15,11 +17,8 @@ import { obtenerIdsVisibles } from '../services/visibilidadPapeletas.service';
  */
 export async function descargarPDF(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    // El id ya llega validado (entero positivo) por papeletaIdParamsSchema.
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
     if (!usuarioToken) {
@@ -33,8 +32,13 @@ export async function descargarPDF(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const idsVisibles = await obtenerIdsVisibles(usuarioToken);
-    if (idsVisibles !== null && !idsVisibles.includes(papeleta.solicitanteId)) {
+    // Autorización centralizada (A-06): misma regla de visibilidad que el
+    // resto del módulo, sin lógica duplicada a mano.
+    const puedeVer = await usuarioPuedeVerPapeleta(
+      usuarioToken,
+      papeleta.solicitanteId,
+    );
+    if (!puedeVer) {
       res.status(403).json({ mensaje: 'No tiene permisos para ver esta papeleta' });
       return;
     }

@@ -134,15 +134,11 @@ export function VerificarTokenPage() {
                   }
                 </span>
               </div>
-              <div className="flex gap-4 py-1.5 border-b border-gray-700">
+              <div className="flex gap-4 py-1.5">
                 <span className="w-32 shrink-0 text-xs text-gray-500">Estado</span>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE[p.estado]}`}>
                   {ETIQUETA_ESTADO[p.estado]}
                 </span>
-              </div>
-              <div className="flex gap-4 py-1.5">
-                <span className="w-32 shrink-0 text-xs text-gray-500">Token</span>
-                <span className="font-mono font-bold tracking-widest text-emerald-400">{p.token}</span>
               </div>
             </div>
           </Card>

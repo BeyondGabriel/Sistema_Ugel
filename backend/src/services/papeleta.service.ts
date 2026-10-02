@@ -127,6 +127,29 @@ export async function determinarAprobador(solicitanteId: number): Promise<number
 }
 
 /**
+ * Comprueba en la base de datos si `usuarioId` es el aprobador VIGENTE del
+ * solicitante `solicitanteId`, usando las reglas de jerarquía actuales
+ * (`determinarAprobador`). Evita que un aprobador que quedó obsoleto tras
+ * un cambio de jefe/rol siga operando sobre una papeleta.
+ *
+ * Devuelve `false` cuando no es posible determinar un aprobador vigente.
+ */
+export async function esAprobadorVigente(
+  solicitanteId: number,
+  usuarioId: number,
+): Promise<boolean> {
+  try {
+    const aprobadorActual = await determinarAprobador(solicitanteId);
+    return aprobadorActual !== null && aprobadorActual === usuarioId;
+  } catch (error) {
+    if (error instanceof AprobadorNoEncontradoError) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
  * Placeholder de aplicación de bloqueos de asistencia al aprobar una
  * papeleta. El bloqueo real ya es efectivo en cuanto la papeleta queda
  * APROBADA (ver services/bloqueos.service.ts → verificarBloqueo, que

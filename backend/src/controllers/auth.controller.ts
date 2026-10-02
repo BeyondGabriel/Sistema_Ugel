@@ -52,10 +52,10 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // H-08: misma respuesta genérica que ante credenciales inválidas, para no
+    // revelar la existencia ni el estado de una cuenta (anti-enumeración).
     if (!usuario.activo) {
-      res.status(403).json({
-        mensaje: 'El usuario está desactivado. Contacte con el administrador.',
-      });
+      res.status(401).json({ mensaje: 'Credenciales inválidas' });
       return;
     }
 

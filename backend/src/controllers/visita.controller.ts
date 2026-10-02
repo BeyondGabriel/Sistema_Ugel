@@ -123,9 +123,24 @@ export async function marcarGafete(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params as unknown as z.infer<typeof visitaIdParamsSchema>;
 
+    const usuarioToken = req.usuario;
+    if (!usuarioToken) {
+      res.status(401).json({ mensaje: 'No autenticado' });
+      return;
+    }
+
     const visita = await prisma.visita.findUnique({ where: { id } });
     if (!visita) {
       res.status(404).json({ mensaje: 'Visita no encontrada' });
+      return;
+    }
+
+    // B-02: mismo control a nivel de recurso que registrarSalida.
+    const esAdmin = usuarioToken.rol === Rol.ADMIN;
+    if (!esAdmin && visita.registradorId !== usuarioToken.id) {
+      res.status(403).json({
+        mensaje: 'Solo el vigilante que registró la visita o un administrador pueden marcar el gafete',
+      });
       return;
     }
 

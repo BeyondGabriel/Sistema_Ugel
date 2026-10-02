@@ -55,6 +55,7 @@ router.put(
 router.get(
   '/',
   authJWT,
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH', 'ESPECIALISTA', 'JEFE', 'DIRECTORA'),
   validate(listarMovimientosQuerySchema, 'query'),
   listarMovimientos,
 );

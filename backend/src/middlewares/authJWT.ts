@@ -31,6 +31,8 @@ export interface UsuarioAutenticado {
   id: number;
   email: string;
   rol: Rol;
+  /** true cuando la cuenta tiene una contraseña pendiente de cambio */
+  cambioPassword: boolean;
   requiereCambioPassword?: boolean;
 }
 
@@ -128,6 +130,7 @@ export async function authJWT(
       id: usuario.id,
       email: usuario.email,
       rol: usuario.rol,
+      cambioPassword: usuario.cambioPassword,
       ...(payload.requiereCambioPassword === true
         ? { requiereCambioPassword: true }
         : {}),
