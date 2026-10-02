@@ -26,6 +26,8 @@ export const cambiarPasswordSchema = z
 
     nuevaPassword: z
       .string({ error: 'La nueva contraseña debe ser un texto' })
-      .min(1, 'La nueva contraseña es obligatoria'),
+      .min(8, 'La contraseña debe tener mínimo 8 caracteres')
+      .regex(/\d/, 'La contraseña debe contener al menos un número')
+      .regex(/[^a-zA-Z0-9]/, 'La contraseña debe contener al menos un símbolo'),
   })
   .strict();

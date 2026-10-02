@@ -4,6 +4,12 @@
 
 import { z } from 'zod';
 import { EstadoPapeleta, TipoTiempo } from '@prisma/client';
+import {
+  MOTIVOS_PAPELETA,
+  MOTIVO_OTROS,
+  type MotivoPapeleta,
+} from '../utils/motivosPapeleta';
+import { parseFechaLocal } from '../utils/fechas';
 
 const idSchema = z
   .coerce
@@ -57,12 +63,6 @@ const fechaHoraSchema = z
     'La fecha u hora no es válida',
   );
 
-const textoMotivoSchema = z
-  .string({ error: 'El motivo debe ser un texto' })
-  .trim()
-  .min(1, 'El motivo es obligatorio')
-  .max(500, 'El motivo no puede superar los 500 caracteres');
-
 const textoMotivoOtrosSchema = z
   .string({ error: 'motivoOtros debe ser un texto' })
   .trim()
@@ -74,19 +74,33 @@ const camposPapeletaBase = {
     error: 'tipoTiempo debe ser DIAS u HORAS',
   }),
 
-  motivo: textoMotivoSchema,
+  motivo: z.enum(MOTIVOS_PAPELETA, {
+    error: 'El motivo especificado no es válido',
+  }),
 
   motivoOtros: textoMotivoOtrosSchema
     .nullable()
     .optional(),
 };
 
+/** Campos ya validados y normalizados de una papeleta (salida del esquema). */
+interface PapeletaNormalizada {
+  tipoTiempo: TipoTiempo;
+  motivo: MotivoPapeleta;
+  motivoOtros: string | null;
+  fechaInicio: Date;
+  fechaFin: Date;
+  horaSalida: Date | null;
+  horaRetorno: Date | null;
+}
+
 /**
  * Esquema utilizado para crear y reenviar una papeleta.
  *
- * Las reglas que dependen de la combinación de campos, como qué
- * fechas/horas son obligatorias según tipoTiempo, permanecen
- * en validarCamposPapeleta() del controlador.
+ * Además de validar el formato de cada campo, centraliza mediante
+ * superRefine() las reglas de negocio condicionales según tipoTiempo
+ * (obligatoriedad y coherencia de fechas/horas) y normaliza la salida a
+ * Date, de modo que el controlador trabaje directamente con datos tipados.
  */
 export const papeletaSchema = z
   .object({
@@ -100,7 +114,121 @@ export const papeletaSchema = z
 
     horaRetorno: fechaHoraSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((datos, ctx) => {
+    if (datos.motivo === MOTIVO_OTROS && !datos.motivoOtros) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['motivoOtros'],
+        message: 'motivoOtros es obligatorio cuando el motivo es "Otros"',
+      });
+    }
+
+    if (datos.tipoTiempo === TipoTiempo.DIAS) {
+      if (datos.fechaInicio === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fechaInicio'],
+          message: 'fechaInicio es obligatorio para papeletas de tipo DIAS',
+        });
+      }
+
+      if (datos.fechaFin === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fechaFin'],
+          message: 'fechaFin es obligatorio para papeletas de tipo DIAS',
+        });
+      }
+
+      if (
+        datos.fechaInicio !== undefined &&
+        datos.fechaFin !== undefined &&
+        new Date(datos.fechaFin) < new Date(datos.fechaInicio)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['fechaFin'],
+          message: 'fechaFin debe ser mayor o igual a fechaInicio',
+        });
+      }
+
+      return;
+    }
+
+    // tipoTiempo === HORAS
+    if (datos.horaSalida === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['horaSalida'],
+        message: 'horaSalida es obligatoria para papeletas de tipo HORAS',
+      });
+    }
+
+    if (datos.horaRetorno === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['horaRetorno'],
+        message: 'horaRetorno es obligatoria para papeletas de tipo HORAS',
+      });
+    }
+
+    if (datos.horaSalida !== undefined && datos.horaRetorno !== undefined) {
+      const salida = new Date(datos.horaSalida);
+      const retorno = new Date(datos.horaRetorno);
+
+      if (retorno <= salida) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['horaRetorno'],
+          message: 'horaRetorno debe ser posterior a horaSalida',
+        });
+        return;
+      }
+
+      const mismoDia =
+        salida.getFullYear() === retorno.getFullYear() &&
+        salida.getMonth() === retorno.getMonth() &&
+        salida.getDate() === retorno.getDate();
+
+      if (!mismoDia) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['horaRetorno'],
+          message: 'horaSalida y horaRetorno deben ser del mismo día',
+        });
+      }
+    }
+  })
+  .transform((datos): PapeletaNormalizada => {
+    const motivoOtros =
+      datos.motivo === MOTIVO_OTROS ? datos.motivoOtros ?? null : null;
+
+    if (datos.tipoTiempo === TipoTiempo.DIAS) {
+      return {
+        tipoTiempo: datos.tipoTiempo,
+        motivo: datos.motivo,
+        motivoOtros,
+        fechaInicio: new Date(datos.fechaInicio as string),
+        fechaFin: new Date(datos.fechaFin as string),
+        horaSalida: null,
+        horaRetorno: null,
+      };
+    }
+
+    const horaSalida = new Date(datos.horaSalida as string);
+    const horaRetorno = new Date(datos.horaRetorno as string);
+
+    return {
+      tipoTiempo: datos.tipoTiempo,
+      motivo: datos.motivo,
+      motivoOtros,
+      fechaInicio: horaSalida,
+      fechaFin: horaRetorno,
+      horaSalida,
+      horaRetorno,
+    };
+  });
 
 export const rechazarPapeletaSchema = z
   .object({
@@ -164,4 +292,18 @@ export const listarPapeletasQuerySchema = z
 
     fechaFin: fechaSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((datos, ctx) => {
+    if (
+      datos.fechaInicio !== undefined &&
+      datos.fechaFin !== undefined &&
+      parseFechaLocal(datos.fechaFin, true) <
+        parseFechaLocal(datos.fechaInicio)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['fechaFin'],
+        message: 'fechaFin debe ser mayor o igual a fechaInicio',
+      });
+    }
+  });

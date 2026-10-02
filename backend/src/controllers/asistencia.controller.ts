@@ -3,10 +3,18 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { TipoMovimiento, Rol, Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { verificarBloqueo } from '../services/bloqueos.service';
 import { obtenerRangoDelDia } from '../utils/fechas';
+import {
+  registrarMovimientoSchema,
+  editarMovimientoSchema,
+  asistenciaIdParamsSchema,
+  listarMovimientosQuerySchema,
+  obtenerPresenciaQuerySchema,
+} from '../schemas/asistencia.schema';
 
 /** Roles que, en este módulo, solo pueden consultar sus propios movimientos. */
 const ROLES_SOLO_PROPIOS: Rol[] = [Rol.ESPECIALISTA, Rol.JEFE, Rol.DIRECTORA];
@@ -83,27 +91,9 @@ function emitirCambioPresencia(usuarioId: number): void {
  */
 export async function registrarMovimiento(req: Request, res: Response): Promise<void> {
   try {
-    const { usuarioId, tipo, timestamp } = req.body as {
-      usuarioId?: number;
-      tipo?: TipoMovimiento;
-      timestamp?: string;
-    };
-
-    if (!usuarioId || !tipo || !timestamp) {
-      res.status(400).json({ mensaje: 'usuarioId, tipo y timestamp son obligatorios' });
-      return;
-    }
-
-    if (tipo !== TipoMovimiento.ENTRADA && tipo !== TipoMovimiento.SALIDA) {
-      res.status(400).json({ mensaje: 'tipo debe ser ENTRADA o SALIDA' });
-      return;
-    }
+    const { usuarioId, tipo, timestamp } = req.body as z.infer<typeof registrarMovimientoSchema>;
 
     const fechaMovimiento = new Date(timestamp);
-    if (Number.isNaN(fechaMovimiento.getTime())) {
-      res.status(400).json({ mensaje: 'timestamp no es una fecha válida' });
-      return;
-    }
 
     const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
 
@@ -166,12 +156,7 @@ export async function registrarMovimiento(req: Request, res: Response): Promise<
  */
 export async function editarMovimiento(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof asistenciaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
     if (!usuarioToken) {
@@ -179,15 +164,7 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
       return;
     }
 
-    const { nuevoTimestamp, nuevoTipo } = req.body as {
-      nuevoTimestamp?: string;
-      nuevoTipo?: TipoMovimiento;
-    };
-
-    if (nuevoTimestamp === undefined && nuevoTipo === undefined) {
-      res.status(400).json({ mensaje: 'Debe enviar nuevoTimestamp o nuevoTipo para editar el movimiento' });
-      return;
-    }
+    const { nuevoTimestamp, nuevoTipo } = req.body as z.infer<typeof editarMovimientoSchema>;
 
     const movimiento = await prisma.movimiento.findUnique({ where: { id } });
 
@@ -207,23 +184,11 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
       }
     }
 
-    let nuevaFecha = movimiento.timestamp;
-    if (nuevoTimestamp !== undefined) {
-      nuevaFecha = new Date(nuevoTimestamp);
-      if (Number.isNaN(nuevaFecha.getTime())) {
-        res.status(400).json({ mensaje: 'nuevoTimestamp no es una fecha válida' });
-        return;
-      }
-    }
+    const nuevaFecha = nuevoTimestamp !== undefined
+      ? new Date(nuevoTimestamp)
+      : movimiento.timestamp;
 
-    let nuevoTipoFinal = movimiento.tipo;
-    if (nuevoTipo !== undefined) {
-      if (nuevoTipo !== TipoMovimiento.ENTRADA && nuevoTipo !== TipoMovimiento.SALIDA) {
-        res.status(400).json({ mensaje: 'nuevoTipo debe ser ENTRADA o SALIDA' });
-        return;
-      }
-      nuevoTipoFinal = nuevoTipo;
-    }
+    const nuevoTipoFinal = nuevoTipo ?? movimiento.tipo;
 
     // Verifica que el nuevo timestamp no caiga en un rango bloqueado por papeleta
     const estaBloqueado = await verificarBloqueo(movimiento.usuarioId, nuevaFecha);
@@ -273,12 +238,8 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { usuarioId, fechaInicio, fechaFin, jefaturaId } = req.query as {
-      usuarioId?: string;
-      fechaInicio?: string;
-      fechaFin?: string;
-      jefaturaId?: string;
-    };
+    const { usuarioId, fechaInicio, fechaFin, jefaturaId } =
+      req.query as unknown as z.infer<typeof listarMovimientosQuerySchema>;
 
     const where: Prisma.MovimientoWhereInput = {};
 
@@ -287,33 +248,18 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
       // sin importar lo que se haya enviado en usuarioId.
       where.usuarioId = usuarioToken.id;
     } else if (usuarioId !== undefined) {
-      const usuarioIdNum = Number(usuarioId);
-      if (Number.isNaN(usuarioIdNum)) {
-        res.status(400).json({ mensaje: 'usuarioId debe ser numérico' });
-        return;
-      }
-      where.usuarioId = usuarioIdNum;
+      where.usuarioId = usuarioId;
     }
 
     if (fechaInicio !== undefined || fechaFin !== undefined) {
       const filtroFecha: Prisma.DateTimeFilter = {};
 
       if (fechaInicio !== undefined) {
-        const fecha = parseFechaLocal(fechaInicio);
-        if (Number.isNaN(fecha.getTime())) {
-          res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
-          return;
-        }
-        filtroFecha.gte = fecha;
+        filtroFecha.gte = parseFechaLocal(fechaInicio);
       }
 
       if (fechaFin !== undefined) {
-        const fecha = parseFechaLocal(fechaFin, true);
-        if (Number.isNaN(fecha.getTime())) {
-          res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
-          return;
-        }
-        filtroFecha.lte = fecha;
+        filtroFecha.lte = parseFechaLocal(fechaFin, true);
       }
 
       where.timestamp = filtroFecha;
@@ -322,12 +268,7 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
     // jefaturaId filtra por la jefatura del usuario dueño del movimiento.
     // Solo tiene sentido para quienes pueden ver más de sus propios datos.
     if (jefaturaId !== undefined && !ROLES_SOLO_PROPIOS.includes(usuarioToken.rol)) {
-      const jefaturaIdNum = Number(jefaturaId);
-      if (Number.isNaN(jefaturaIdNum)) {
-        res.status(400).json({ mensaje: 'jefaturaId debe ser numérico' });
-        return;
-      }
-      where.usuario = { jefaturaId: jefaturaIdNum };
+      where.usuario = { jefaturaId };
     }
 
     const movimientos = await prisma.movimiento.findMany({
@@ -369,17 +310,12 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
  */
 export async function obtenerPresencia(req: Request, res: Response): Promise<void> {
   try {
-    const { jefaturaId } = req.query as { jefaturaId?: string };
+    const { jefaturaId } = req.query as unknown as z.infer<typeof obtenerPresenciaQuerySchema>;
 
     const whereUsuario: Prisma.UsuarioWhereInput = { activo: true };
 
     if (jefaturaId !== undefined) {
-      const jefaturaIdNum = Number(jefaturaId);
-      if (Number.isNaN(jefaturaIdNum)) {
-        res.status(400).json({ mensaje: 'jefaturaId debe ser numérico' });
-        return;
-      }
-      whereUsuario.jefaturaId = jefaturaIdNum;
+      whereUsuario.jefaturaId = jefaturaId;
     }
 
     const usuarios = await prisma.usuario.findMany({

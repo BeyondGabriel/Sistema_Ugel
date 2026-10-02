@@ -4,10 +4,17 @@
 
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { Rol, Prisma, Usuario } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { validarPassword } from '../utils/validarPassword';
 import { generarPasswordSegura } from '../utils/generarPassword';
+import {
+  crearUsuarioSchema,
+  editarUsuarioSchema,
+  asignarJefeSchema,
+  usuarioIdParamsSchema,
+} from '../schemas/usuario.schema';
 
 /** Roles que solo pueden tener un usuario activo a la vez. */
 const ROLES_UNICOS: Rol[] = [Rol.DIRECTORA, Rol.RRHH, Rol.ADMIN];
@@ -47,25 +54,7 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
       apellidos,
       jefaturaId,
       jefeId,
-    } = req.body as {
-      email?: string;
-      password?: string;
-      rol?: Rol;
-      nombres?: string;
-      apellidos?: string;
-      jefaturaId?: number;
-      jefeId?: number;
-    };
-
-    if (!email || !rol || !nombres || !apellidos) {
-      res.status(400).json({ mensaje: 'email, rol, nombres y apellidos son obligatorios' });
-      return;
-    }
-
-    if (!Object.values(Rol).includes(rol)) {
-      res.status(400).json({ mensaje: 'El rol especificado no es válido' });
-      return;
-    }
+    } = req.body as z.infer<typeof crearUsuarioSchema>;
 
     const emailExistente = await prisma.usuario.findUnique({ where: { email } });
     if (emailExistente) {
@@ -159,12 +148,7 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
  */
 export async function editarUsuario(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof usuarioIdParamsSchema>;
 
     const usuarioActual = await prisma.usuario.findUnique({ where: { id } });
 
@@ -181,20 +165,7 @@ export async function editarUsuario(req: Request, res: Response): Promise<void> 
       jefaturaId,
       jefeId,
       activo,
-    } = req.body as {
-      email?: string;
-      rol?: Rol;
-      nombres?: string;
-      apellidos?: string;
-      jefaturaId?: number | null;
-      jefeId?: number | null;
-      activo?: boolean;
-    };
-
-    if (rol !== undefined && !Object.values(Rol).includes(rol)) {
-      res.status(400).json({ mensaje: 'El rol especificado no es válido' });
-      return;
-    }
+    } = req.body as z.infer<typeof editarUsuarioSchema>;
 
     if (email !== undefined && email !== usuarioActual.email) {
       const emailExistente = await prisma.usuario.findUnique({ where: { email } });
@@ -280,12 +251,7 @@ if (activo !== undefined) datosActualizacion.activo = activo;
  */
 export async function desactivarUsuario(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof usuarioIdParamsSchema>;
 
     const usuario = await prisma.usuario.findUnique({ where: { id } });
 
@@ -406,12 +372,7 @@ export async function listarUsuarios(req: Request, res: Response): Promise<void>
  */
 export async function obtenerUsuario(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof usuarioIdParamsSchema>;
 
     const usuario = await prisma.usuario.findUnique({
       where: { id },
@@ -440,12 +401,7 @@ export async function obtenerUsuario(req: Request, res: Response): Promise<void>
  */
 export async function asignarJefe(req: Request, res: Response): Promise<void> {
   try {
-    const { usuarioId, jefeId } = req.body as { usuarioId?: number; jefeId?: number };
-
-    if (!usuarioId || !jefeId) {
-      res.status(400).json({ mensaje: 'usuarioId y jefeId son obligatorios' });
-      return;
-    }
+    const { usuarioId, jefeId } = req.body as z.infer<typeof asignarJefeSchema>;
 
     const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId } });
 

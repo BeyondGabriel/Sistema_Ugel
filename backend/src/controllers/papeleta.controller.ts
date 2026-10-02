@@ -3,7 +3,8 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
-import { TipoTiempo, EstadoPapeleta, Rol, Prisma } from '@prisma/client';
+import { z } from 'zod';
+import { EstadoPapeleta, Rol, Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 import {
   generarNumeroPapeleta,
@@ -14,202 +15,15 @@ import {
   revertirSiExpiro,
 } from '../services/papeleta.service';
 import { notificar } from '../services/notificacion.service';
-import { MOTIVO_OTROS, esMotivoValido } from '../utils/motivosPapeleta';
+import { parseFechaLocal } from '../utils/fechas';
 import { obtenerIdsVisibles, usuarioPuedeVerPapeleta } from '../services/visibilidadPapeletas.service';
-
-interface CamposPapeletaInput {
-  tipoTiempo?: TipoTiempo;
-  fechaInicio?: string;
-  fechaFin?: string;
-  horaSalida?: string;
-  horaRetorno?: string;
-  motivo?: string;
-  motivoOtros?: string;
-}
-
-interface CamposPapeletaNormalizados {
-  tipoTiempo: TipoTiempo;
-  fechaInicio: Date;
-  fechaFin: Date;
-  horaSalida: Date | null;
-  horaRetorno: Date | null;
-  motivo: string;
-  motivoOtros: string | null;
-}
-
-type ResultadoValidacion =
-  | { ok: true; campos: CamposPapeletaNormalizados }
-  | { ok: false; mensaje: string };
-
-/**
- * Convierte una fecha YYYY-MM-DD a un objeto Date local.
- * Si `finDelDia` es true, la hora se fija a 23:59:59.999.
- */
-function parseFechaLocal(fecha: string, finDelDia = false): Date {
-  const valor = fecha.trim();
-
-  // YYYY-MM-DD: se interpreta como fecha local.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    const [y, m, d] = valor.split('-').map(Number);
-    const resultado = finDelDia
-      ? new Date(y, m - 1, d, 23, 59, 59, 999)
-      : new Date(y, m - 1, d);
-
-    // Evita que JavaScript normalice fechas inexistentes,
-    // por ejemplo 2026-02-30 -> 2026-03-02.
-    if (
-      resultado.getFullYear() !== y ||
-      resultado.getMonth() !== m - 1 ||
-      resultado.getDate() !== d
-    ) {
-      return new Date(NaN);
-    }
-
-    return resultado;
-  }
-
-  // ISO 8601 UTC.
-  if (
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(valor)
-  ) {
-    return new Date(valor);
-  }
-
-  return new Date(NaN);
-}
-
-/**
- * Valida y normaliza los campos editables de una papeleta. Se usa tanto al
- * crearla como al reenviarla tras una observación, ya que ambos flujos
- * comparten exactamente las mismas reglas de validación.
- */
-function validarCamposPapeleta(input: CamposPapeletaInput): ResultadoValidacion {
-  const {
-    tipoTiempo,
-    fechaInicio,
-    fechaFin,
-    horaSalida,
-    horaRetorno,
-    motivo,
-    motivoOtros,
-  } = input;
-
-  if (!tipoTiempo || !motivo) {
-    return { ok: false, mensaje: 'tipoTiempo y motivo son obligatorios' };
-  }
-
-  if (tipoTiempo !== TipoTiempo.DIAS && tipoTiempo !== TipoTiempo.HORAS) {
-    return { ok: false, mensaje: 'tipoTiempo debe ser DIAS u HORAS' };
-  }
-
-  if (!esMotivoValido(motivo)) {
-    return { ok: false, mensaje: 'El motivo especificado no es válido' };
-  }
-
-  if (motivo === MOTIVO_OTROS && !motivoOtros) {
-    return {
-      ok: false,
-      mensaje: 'motivoOtros es obligatorio cuando el motivo es "Otros"',
-    };
-  }
-
-  const motivoOtrosFinal =
-    motivo === MOTIVO_OTROS ? motivoOtros ?? null : null;
-
-  if (tipoTiempo === TipoTiempo.DIAS) {
-    if (!fechaInicio || !fechaFin) {
-      return {
-        ok: false,
-        mensaje:
-          'fechaInicio y fechaFin son obligatorios para papeletas de tipo DIAS',
-      };
-    }
-
-    const inicio = new Date(fechaInicio);
-    const fin = new Date(fechaFin);
-
-    if (Number.isNaN(inicio.getTime()) || Number.isNaN(fin.getTime())) {
-      return {
-        ok: false,
-        mensaje: 'fechaInicio o fechaFin no son fechas válidas',
-      };
-    }
-
-    if (fin < inicio) {
-      return {
-        ok: false,
-        mensaje: 'fechaFin debe ser mayor o igual a fechaInicio',
-      };
-    }
-
-    return {
-      ok: true,
-      campos: {
-        tipoTiempo,
-        fechaInicio: inicio,
-        fechaFin: fin,
-        horaSalida: null,
-        horaRetorno: null,
-        motivo,
-        motivoOtros: motivoOtrosFinal,
-      },
-    };
-  }
-
-  // tipoTiempo === HORAS
-  if (!horaSalida || !horaRetorno) {
-    return {
-      ok: false,
-      mensaje:
-        'horaSalida y horaRetorno son obligatorios para papeletas de tipo HORAS',
-    };
-  }
-
-  const salida = new Date(horaSalida);
-  const retorno = new Date(horaRetorno);
-
-  if (
-    Number.isNaN(salida.getTime()) ||
-    Number.isNaN(retorno.getTime())
-  ) {
-    return {
-      ok: false,
-      mensaje: 'horaSalida o horaRetorno no son fechas/horas válidas',
-    };
-  }
-
-  if (retorno <= salida) {
-    return {
-      ok: false,
-      mensaje: 'horaRetorno debe ser posterior a horaSalida',
-    };
-  }
-
-  const mismoDia =
-    salida.getFullYear() === retorno.getFullYear() &&
-    salida.getMonth() === retorno.getMonth() &&
-    salida.getDate() === retorno.getDate();
-
-  if (!mismoDia) {
-    return {
-      ok: false,
-      mensaje: 'horaSalida y horaRetorno deben ser del mismo día',
-    };
-  }
-
-  return {
-    ok: true,
-    campos: {
-      tipoTiempo,
-      fechaInicio: salida,
-      fechaFin: retorno,
-      horaSalida: salida,
-      horaRetorno: retorno,
-      motivo,
-      motivoOtros: motivoOtrosFinal,
-    },
-  };
-}
+import {
+  papeletaSchema,
+  rechazarPapeletaSchema,
+  observarPapeletaSchema,
+  papeletaIdParamsSchema,
+  listarPapeletasQuerySchema,
+} from '../schemas/papeleta.schema';
 
 /**
  * POST /api/papeletas
@@ -229,16 +43,8 @@ export async function crearPapeleta(
       return;
     }
 
-    const resultado = validarCamposPapeleta(
-      req.body as CamposPapeletaInput
-    );
-
-    if (!resultado.ok) {
-      res.status(400).json({ mensaje: resultado.mensaje });
-      return;
-    }
-
-    const { campos } = resultado;
+    // Los datos ya llegan validados y normalizados (Date) por papeletaSchema.
+    const campos = req.body as z.infer<typeof papeletaSchema>;
 
     let aprobadorId: number | null;
 
@@ -309,125 +115,44 @@ export async function listarPapeletas(
       return;
     }
 
-    const {
-      estado,
-      solicitanteId,
-      fechaInicio,
-      fechaFin,
-    } = req.query as {
-      estado?: EstadoPapeleta;
-      solicitanteId?: string;
-      fechaInicio?: string;
-      fechaFin?: string;
-    };
+    const { estado, solicitanteId, fechaInicio, fechaFin } =
+      req.query as unknown as z.infer<typeof listarPapeletasQuerySchema>;
 
     const idsVisibles = await obtenerIdsVisibles(usuarioToken);
 
     const where: Prisma.PapeletaWhereInput = {};
 
     if (solicitanteId !== undefined) {
-      const solicitanteIdNum = Number(solicitanteId);
-
-      if (Number.isNaN(solicitanteIdNum)) {
-        res.status(400).json({
-          mensaje: 'solicitanteId debe ser numérico',
-        });
-        return;
-      }
-
-      if (
-        idsVisibles !== null &&
-        !idsVisibles.includes(solicitanteIdNum)
-      ) {
+      if (idsVisibles !== null && !idsVisibles.includes(solicitanteId)) {
         res.status(403).json({
-          mensaje:
-            'No tiene permisos para ver las papeletas de este usuario',
+          mensaje: 'No tiene permisos para ver las papeletas de este usuario',
         });
         return;
       }
 
-      where.solicitanteId = solicitanteIdNum;
+      where.solicitanteId = solicitanteId;
     } else if (idsVisibles !== null) {
       where.solicitanteId = { in: idsVisibles };
     }
 
     if (estado !== undefined) {
-      if (!Object.values(EstadoPapeleta).includes(estado)) {
-        res.status(400).json({
-          mensaje: 'El estado especificado no es válido',
-        });
-        return;
-      }
-
       where.estado = estado;
     }
 
-    // Filtro por fecha de creación (no por fecha de inicio)
-    let fechaInicioFiltro: Date | undefined;
-    let fechaFinFiltro: Date | undefined;
+    // Filtro por fecha de creación (no por fecha de inicio). El rango ya fue
+    // validado por listarPapeletasQuerySchema.
+    if (fechaInicio !== undefined || fechaFin !== undefined) {
+      const filtroFecha: Prisma.DateTimeFilter = {};
 
-    if (fechaInicio !== undefined) {
-      const fecha = parseFechaLocal(fechaInicio);
-
-      if (Number.isNaN(fecha.getTime())) {
-        res.status(400).json({
-          mensaje: 'Los datos enviados no son válidos',
-          errores: {
-            fechaInicio: 'La fecha no es válida',
-          },
-        });
-        return;
+      if (fechaInicio !== undefined) {
+        filtroFecha.gte = parseFechaLocal(fechaInicio);
       }
 
-      fechaInicioFiltro = fecha;
-    }
-
-    if (fechaFin !== undefined) {
-      const fecha = parseFechaLocal(fechaFin, true);
-
-      if (Number.isNaN(fecha.getTime())) {
-        res.status(400).json({
-          mensaje: 'Los datos enviados no son válidos',
-          errores: {
-            fechaFin: 'La fecha no es válida',
-          },
-        });
-        return;
+      if (fechaFin !== undefined) {
+        filtroFecha.lte = parseFechaLocal(fechaFin, true);
       }
 
-      fechaFinFiltro = fecha;
-    }
-
-    // Validación semántica del rango
-    if (
-      fechaInicioFiltro !== undefined &&
-      fechaFinFiltro !== undefined &&
-      fechaInicioFiltro > fechaFinFiltro
-    ) {
-      res.status(400).json({
-        mensaje: 'Los datos enviados no son válidos',
-        errores: {
-          fechaFin: 'fechaFin debe ser mayor o igual a fechaInicio',
-        },
-      });
-      return;
-    }
-
-    if (
-      fechaInicioFiltro !== undefined ||
-      fechaFinFiltro !== undefined
-    ) {
-      where.fechaCreacion = {};
-
-      if (fechaInicioFiltro !== undefined) {
-        (where.fechaCreacion as Prisma.DateTimeFilter).gte =
-          fechaInicioFiltro;
-      }
-
-      if (fechaFinFiltro !== undefined) {
-        (where.fechaCreacion as Prisma.DateTimeFilter).lte =
-          fechaFinFiltro;
-      }
+      where.fechaCreacion = filtroFecha;
     }
 
     const papeletas = await prisma.papeleta.findMany({
@@ -470,14 +195,7 @@ export async function obtenerPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -547,14 +265,7 @@ export async function iniciarRevision(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -622,14 +333,7 @@ export async function aprobarPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -705,14 +409,7 @@ export async function rechazarPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -723,16 +420,7 @@ export async function rechazarPapeleta(
       return;
     }
 
-    const { motivoRechazo } = req.body as {
-      motivoRechazo?: string;
-    };
-
-    if (!motivoRechazo) {
-      res.status(400).json({
-        mensaje: 'motivoRechazo es obligatorio',
-      });
-      return;
-    }
+    const { motivoRechazo } = req.body as z.infer<typeof rechazarPapeletaSchema>;
 
     let papeleta = await prisma.papeleta.findUnique({
       where: { id },
@@ -796,14 +484,7 @@ export async function observarPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -814,16 +495,7 @@ export async function observarPapeleta(
       return;
     }
 
-    const { comentario } = req.body as {
-      comentario?: string;
-    };
-
-    if (!comentario) {
-      res.status(400).json({
-        mensaje: 'comentario es obligatorio',
-      });
-      return;
-    }
+    const { comentario } = req.body as z.infer<typeof observarPapeletaSchema>;
 
     let papeleta = await prisma.papeleta.findUnique({
       where: { id },
@@ -886,14 +558,7 @@ export async function cancelarPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -960,14 +625,7 @@ export async function reenviarPapeleta(
   res: Response
 ): Promise<void> {
   try {
-    const id = Number(req.params.id);
-
-    if (Number.isNaN(id)) {
-      res.status(400).json({
-        mensaje: 'El id proporcionado no es válido',
-      });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
 
@@ -1006,18 +664,8 @@ export async function reenviarPapeleta(
       return;
     }
 
-    const resultado = validarCamposPapeleta(
-      req.body as CamposPapeletaInput
-    );
-
-    if (!resultado.ok) {
-      res.status(400).json({
-        mensaje: resultado.mensaje,
-      });
-      return;
-    }
-
-    const { campos } = resultado;
+    // Los datos ya llegan validados y normalizados (Date) por papeletaSchema.
+    const campos = req.body as z.infer<typeof papeletaSchema>;
 
     const papeletaActualizada = await prisma.papeleta.update({
       where: { id },

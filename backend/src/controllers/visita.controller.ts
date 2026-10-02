@@ -3,10 +3,17 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { Rol, Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { verificarPresencia } from '../services/visita.service';
 import { notificar } from '../services/notificacion.service';
+import { parseFechaLocal } from '../utils/fechas';
+import {
+  registrarVisitaSchema,
+  visitaIdParamsSchema,
+  listarVisitasQuerySchema,
+} from '../schemas/visita.schema';
 
 /** Roles que solo pueden ver las visitas que ellos mismos recibieron. */
 const ROLES_SOLO_PROPIAS_RECIBIDAS: Rol[] = [Rol.ESPECIALISTA, Rol.JEFE, Rol.DIRECTORA];
@@ -24,17 +31,9 @@ export async function registrarVisita(req: Request, res: Response): Promise<void
       return;
     }
 
-    const { visitanteNombre, visitanteDni, trabajadorVisitadoId, gafeteEntregado } = req.body as {
-      visitanteNombre?: string;
-      visitanteDni?: string;
-      trabajadorVisitadoId?: number;
-      gafeteEntregado?: boolean;
-    };
-
-    if (!visitanteNombre || !visitanteDni || !trabajadorVisitadoId) {
-      res.status(400).json({ mensaje: 'visitanteNombre, visitanteDni y trabajadorVisitadoId son obligatorios' });
-      return;
-    }
+    // Los datos ya llegan validados por registrarVisitaSchema.
+    const { visitanteNombre, visitanteDni, trabajadorVisitadoId, gafeteEntregado } =
+      req.body as z.infer<typeof registrarVisitaSchema>;
 
     const trabajador = await prisma.usuario.findUnique({ where: { id: trabajadorVisitadoId } });
     if (!trabajador) {
@@ -77,11 +76,7 @@ export async function registrarVisita(req: Request, res: Response): Promise<void
  */
 export async function registrarSalida(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof visitaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
     if (!usuarioToken) {
@@ -126,11 +121,7 @@ export async function registrarSalida(req: Request, res: Response): Promise<void
  */
 export async function marcarGafete(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof visitaIdParamsSchema>;
 
     const visita = await prisma.visita.findUnique({ where: { id } });
     if (!visita) {
@@ -164,12 +155,8 @@ export async function listarVisitas(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const { fechaInicio, fechaFin, trabajadorVisitadoId, registradorId } = req.query as {
-      fechaInicio?: string;
-      fechaFin?: string;
-      trabajadorVisitadoId?: string;
-      registradorId?: string;
-    };
+    const { fechaInicio, fechaFin, trabajadorVisitadoId, registradorId } =
+      req.query as unknown as z.infer<typeof listarVisitasQuerySchema>;
 
     const where: Prisma.VisitaWhereInput = {};
 
@@ -177,47 +164,27 @@ export async function listarVisitas(req: Request, res: Response): Promise<void> 
       where.trabajadorVisitadoId = usuarioToken.id;
     } else {
       if (trabajadorVisitadoId !== undefined) {
-        const num = Number(trabajadorVisitadoId);
-        if (Number.isNaN(num)) {
-          res.status(400).json({ mensaje: 'trabajadorVisitadoId debe ser numérico' });
-          return;
-        }
-        where.trabajadorVisitadoId = num;
+        where.trabajadorVisitadoId = trabajadorVisitadoId;
       }
 
       if (registradorId !== undefined) {
-        const num = Number(registradorId);
-        if (Number.isNaN(num)) {
-          res.status(400).json({ mensaje: 'registradorId debe ser numérico' });
-          return;
-        }
-        where.registradorId = num;
+        where.registradorId = registradorId;
       }
     }
 
+    // Filtro por fecha de entrada. El rango y el formato ya fueron validados
+    // por listarVisitasQuerySchema.
     if (fechaInicio !== undefined || fechaFin !== undefined) {
       const filtroFecha: Prisma.DateTimeFilter = {};
 
       if (fechaInicio !== undefined) {
-        const partes = fechaInicio.split('-');
-        if (partes.length !== 3) {
-          res.status(400).json({ mensaje: 'fechaInicio no es una fecha válida' });
-          return;
-        }
-        const [y, m, d] = partes.map(Number);
         // Inicio del día en hora local (ej: 11 de julio a las 00:00:00 en Perú)
-        filtroFecha.gte = new Date(y, m - 1, d);
+        filtroFecha.gte = parseFechaLocal(fechaInicio);
       }
 
       if (fechaFin !== undefined) {
-        const partes = fechaFin.split('-');
-        if (partes.length !== 3) {
-          res.status(400).json({ mensaje: 'fechaFin no es una fecha válida' });
-          return;
-        }
-        const [y, m, d] = partes.map(Number);
         // Fin del día en hora local (ej: 11 de julio a las 23:59:59.999 en Perú)
-        filtroFecha.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+        filtroFecha.lte = parseFechaLocal(fechaFin, true);
       }
 
       where.horaEntrada = filtroFecha;
@@ -247,11 +214,7 @@ export async function listarVisitas(req: Request, res: Response): Promise<void> 
  */
 export async function obtenerVisita(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof visitaIdParamsSchema>;
 
     const usuarioToken = req.usuario;
     if (!usuarioToken) {

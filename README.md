@@ -55,6 +55,7 @@ SIGPER centraliza la gestión de:
 - [Scripts disponibles](#scripts-disponibles)
 - [Cambios recientes](#cambios-recientes)
 - [Estado de los puntos críticos](#estado-de-los-puntos-críticos)
+- [Hallazgos de seguridad pendientes](#hallazgos-de-seguridad-pendientes)
 - [Consideraciones actuales](#consideraciones-actuales)
 - [Licencia](#licencia)
 
@@ -203,28 +204,33 @@ Utiliza:
 
 # Stack tecnológico
 
-| Capa | Tecnología |
-|---|---|
-| Runtime | Node.js |
-| Backend | Express 4 + TypeScript |
-| ORM | Prisma 5 |
-| Base de datos | MySQL |
-| Autenticación | JWT |
-| Hash de contraseñas | bcryptjs |
-| Tiempo real | Socket.IO |
-| Rate limiting | express-rate-limit |
-| Validación | Zod 4 |
-| Reportes | ExcelJS |
-| PDF | PDFKit |
-| Uploads HTTP | Multer |
-| Frontend | React + TypeScript |
-| Bundler | Vite |
-| Routing | React Router |
-| HTTP client | Axios |
-| UI | Tailwind CSS |
-| Componentes | Headless UI |
-| Iconos | Heroicons |
-| Firma externa | Webhook + almacenamiento externo preparado |
+| Capa | Tecnología | Versión real (package.json) |
+|---|---|---|
+| Runtime | Node.js | 18 o superior |
+| Backend | Express | `^4.19.2` |
+| Lenguaje backend | TypeScript | `^5.5.4` |
+| ORM | Prisma (`@prisma/client`) | `^5.20.0` |
+| Base de datos | MySQL | 8 o superior |
+| Autenticación | jsonwebtoken (JWT) | `^9.0.2` |
+| Hash de contraseñas | bcryptjs | `^2.4.3` |
+| Tiempo real | Socket.IO | `^4.7.5` |
+| Rate limiting | express-rate-limit | `^8.7.0` |
+| Validación | Zod | `^4.6.4` |
+| Reportes | ExcelJS | `^4.4.0` |
+| PDF | PDFKit | `^0.15.0` |
+| Uploads HTTP | Multer | `^1.4.5-lts.1` |
+| Frontend | React / React DOM | `^18.3.1` |
+| Lenguaje frontend | TypeScript | `^5.5.4` |
+| Bundler | Vite | `^5.4.2` |
+| Routing | React Router DOM | `^6.26.1` |
+| HTTP client | Axios | `^1.7.7` |
+| Socket (cliente) | socket.io-client | `^4.7.5` |
+| UI | Tailwind CSS | `^3.4.10` |
+| Componentes | Headless UI (`@headlessui/react`) | `^2.1.5` |
+| Iconos | Heroicons (`@heroicons/react`) | `^2.1.5` |
+| Firma externa | Webhook + almacenamiento externo (Supabase) preparado | — |
+
+> Las versiones corresponden a las declaradas en `backend/package.json` y `frontend/package.json`. `Node.js` y `MySQL` se indican como requisitos recomendados (ver sección *Requisitos*).
 
 ---
 
@@ -486,6 +492,43 @@ backend/src/schemas/
 
 La validación se aplica a `body`, `params` y `query` según corresponda.
 
+### Arquitectura de validación (Punto 4)
+
+Toda entrada externa recorre un único flujo seguro antes de alcanzar la lógica de negocio:
+
+```text
+[Request del Cliente]
+        │  (body / params / query)
+        ▼
+[Middleware validate()]                 backend/src/middlewares/validate.ts
+        │  schema.safeParse(req[fuente])
+        ├── ✗ inválido ─► HTTP 400 { mensaje, errores }  (detalle por campo)
+        ▼
+[Esquema Zod: .strict() / .superRefine() / .refine()]
+        │  válido ─► req[fuente] = resultado.data  (datos normalizados)
+        ▼
+[Controlador con tipado seguro: z.infer<typeof schema>]
+```
+
+**El middleware `validate(schema, fuente)`:**
+
+- Recibe el esquema Zod y la fuente a validar (`'body'`, `'params'` o `'query'`).
+- Ejecuta `schema.safeParse(req[fuente])`.
+- Si la validación falla, responde HTTP `400` con `{ mensaje: 'Los datos enviados no son válidos', errores }`, donde `errores` agrupa el primer mensaje por campo a partir de `issue.path`.
+- Si la validación es correcta, **reemplaza** `req[fuente]` con los datos ya validados y normalizados (`resultado.data`) y continúa al controlador.
+
+**Consumo en los controladores (tipado seguro):**
+
+- Los controladores **no revalidan** la entrada; confían en los datos que dejó el middleware y los tipan con el tipo inferido del esquema.
+- `body`: `const { ... } = req.body as z.infer<typeof schema>;`
+- `params` / `query`: `const { ... } = req.params as unknown as z.infer<typeof schema>;`
+
+**Rol de cada mecanismo de Zod en los esquemas:**
+
+- `.strict()`: rechaza campos no contemplados por el contrato (evita propiedades extra). Presente en todos los esquemas del proyecto.
+- `.superRefine()`: reglas de negocio condicionales y de coherencia (por ejemplo, obligatoriedad de campos según `tipoTiempo` en papeletas y orden de fechas en filtros).
+- `.refine()`: validaciones de contenido puntuales (formato/validez de fechas y timestamps; protocolo `https` y host permitido en `svgUrl`).
+
 ### Criterios generales
 
 - IDs: enteros positivos.
@@ -612,7 +655,26 @@ papeletaId
 svgUrl
 ```
 
-La validación estructural del webhook pertenece a este punto; la seguridad específica del secreto `x-webhook-secret` se mantiene como una preocupación independiente del Punto 6.
+El esquema `webhookFirmaSchema` valida la **estructura** (`papeletaId`, `svgUrl`) y además el **contenido** de `svgUrl`: exige protocolo `https` y, cuando `SUPABASE_URL` está configurado, que el host corresponda al dominio de almacenamiento permitido o a un subdominio suyo. Los esquemas inseguros (`javascript:`, `data:`, `file:`, `http:`) se rechazan.
+
+La seguridad del secreto compartido `x-webhook-secret` (comparación en tiempo constante, rate limiting y firma/anti-replay) se mantiene como una preocupación independiente del Punto 6; ver la sección *Hallazgos de seguridad pendientes*.
+
+### Estado de módulos verificados
+
+Durante la auditoría del Punto 4 se revisaron las rutas de entrada de los siguientes módulos, se enlazaron a middleware `validate()` con esquemas Zod `.strict()` y se depuró el código muerto de validación (comprobaciones `Number.isNaN`, parseos y comprobaciones manuales duplicadas) de los controladores revisados:
+
+| Módulo | Fuentes validadas | Estado |
+|---|---|---|
+| Autenticación (`auth`) | `body` (login, cambio de contraseña) | ✅ Blindado y depurado |
+| Usuarios (`usuarios`) | `body`, `params`, `query` | ✅ Blindado y depurado |
+| Jefaturas (`jefaturas`) | `body`, `params` | ✅ Blindado y depurado |
+| Asistencias (`asistencias`) | `body`, `params`, `query` | ✅ Blindado y depurado |
+| Papeletas (`papeletas`) | `body`, `params`, `query` | ✅ Blindado y depurado |
+| Visitas (`visitas`) | `body`, `params`, `query` | ✅ Blindado y depurado |
+| Notificaciones (`notificaciones`) | `query`, `params` | ✅ Blindado y depurado |
+| Firma externa (`firmas/webhook`) | `body` | ✅ Blindado (estructura + contenido) |
+
+Nota de alcance: las rutas de todos estos módulos ya están validadas por `validate()` y sus esquemas rechazan entradas inválidas con HTTP `400`. La depuración de código muerto se aplicó sobre los controladores revisados; algunos manejadores auxiliares (por ejemplo, las rutas de anulación y de PDF bajo `papeletas`, y las exportaciones de reportes) todavía conservan comprobaciones manuales redundantes que el middleware ya cubre.
 
 ---
 
@@ -1493,6 +1555,18 @@ Los módulos principales continuaron funcionando con datos válidos después de 
 | 4 | Validación estructurada de entradas | ✅ Implementado y probado |
 | 5 | Revisión de roles y autorización | ⏳ Pendiente |
 | 6 | Seguridad del webhook de firma externa | ⏳ Pendiente |
+
+---
+
+# Hallazgos de seguridad pendientes
+
+Los siguientes hallazgos corresponden a la **seguridad del Webhook de firma externa** (`POST /api/firmas/webhook`) y quedan **fuera del alcance del Punto 4** (validación estructural de entradas). Se registran para su tratamiento en el **Punto 6**:
+
+- **H1 — Comparación no resistente a ataques de temporización (timing attack):** el secreto del header `x-webhook-secret` se compara con `!==` (comparación de cadenas no constante). Debe reemplazarse por una comparación en tiempo constante (por ejemplo, `crypto.timingSafeEqual`).
+- **H2 — Ausencia de rate limiting en el webhook:** a diferencia de `POST /api/auth/login` y `POST /api/papeletas/verificar-token`, la ruta del webhook no tiene limitador, lo que permite intentos masivos de adivinación del secreto compartido.
+- **H3 — Autenticación basada solo en secreto estático (sin HMAC ni anti-replay):** no se valida una firma HMAC del cuerpo ni un timestamp/nonce, por lo que un secreto filtrado permitiría reutilizar o repetir peticiones.
+
+> El mecanismo de autenticación por `x-webhook-secret` **sí existe**; H1–H3 son tareas de endurecimiento y se atenderán en el Punto 6.
 
 ---
 

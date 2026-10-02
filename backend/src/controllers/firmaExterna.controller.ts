@@ -3,7 +3,9 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
+import { webhookFirmaSchema } from '../schemas/firmaExterna.schema';
 
 /**
  * POST /api/firmas/webhook
@@ -27,12 +29,8 @@ export async function webhookFirma(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { papeletaId, svgUrl } = req.body as { papeletaId?: number; svgUrl?: string };
-
-    if (!papeletaId || !svgUrl) {
-      res.status(400).json({ mensaje: 'papeletaId y svgUrl son obligatorios' });
-      return;
-    }
+    // Los datos ya llegan validados por webhookFirmaSchema.
+    const { papeletaId, svgUrl } = req.body as z.infer<typeof webhookFirmaSchema>;
 
     const papeleta = await prisma.papeleta.findUnique({ where: { id: papeletaId } });
     if (!papeleta) {

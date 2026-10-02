@@ -16,3 +16,20 @@ export function obtenerRangoDelDia(fecha: Date): { inicio: Date; fin: Date } {
 
   return { inicio, fin };
 }
+
+/**
+ * Convierte una fecha ya validada (YYYY-MM-DD) a un Date con hora local.
+ * Si `finDelDia` es true, la hora se fija a 23:59:59.999.
+ *
+ * Es un mapeo de formato (no valida), pensado para usarse sobre entradas
+ * que ya fueron verificadas por Zod.
+ */
+export function parseFechaLocal(fecha: string, finDelDia = false): Date {
+  const [y, m, d] = fecha.split('-').map(Number);
+
+  if (finDelDia) {
+    return new Date(y, m - 1, d, 23, 59, 59, 999);
+  }
+
+  return new Date(y, m - 1, d);
+}

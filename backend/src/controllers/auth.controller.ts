@@ -6,9 +6,13 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
-import { validarPassword } from '../utils/validarPassword';
 import { PayloadJWT } from '../middlewares/authJWT';
+import {
+  loginSchema,
+  cambiarPasswordSchema,
+} from '../schemas/auth.schema';
 
 const EXPIRACION_TOKEN_TEMPORAL = '15m';
 const EXPIRACION_TOKEN_NORMAL = '8h';
@@ -37,15 +41,7 @@ function obtenerJwtSecret(): string {
  */
 export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const { email, password } = req.body as {
-      email?: string;
-      password?: string;
-    };
-
-    if (!email || !password) {
-      res.status(400).json({ mensaje: 'Email y contraseña son obligatorios' });
-      return;
-    }
+    const { email, password } = req.body as z.infer<typeof loginSchema>;
 
     const usuario = await prisma.usuario.findUnique({
       where: { email },
@@ -153,25 +149,7 @@ export async function cambiarPassword(req: Request, res: Response): Promise<void
       return;
     }
 
-    const { passwordActual, nuevaPassword } = req.body as {
-      passwordActual?: string;
-      nuevaPassword?: string;
-    };
-
-    if (!passwordActual || !nuevaPassword) {
-      res.status(400).json({
-        mensaje: 'passwordActual y nuevaPassword son obligatorios',
-      });
-      return;
-    }
-
-    if (!validarPassword(nuevaPassword)) {
-      res.status(400).json({
-        mensaje:
-          'La nueva contraseña debe tener mínimo 8 caracteres, al menos un número y un símbolo',
-      });
-      return;
-    }
+    const { passwordActual, nuevaPassword } = req.body as z.infer<typeof cambiarPasswordSchema>;
 
     const usuario = await prisma.usuario.findUnique({
       where: { id: usuarioToken.id },

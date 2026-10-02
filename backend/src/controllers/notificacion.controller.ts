@@ -3,7 +3,12 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import prisma from '../utils/prisma';
+import {
+  notificacionIdParamsSchema,
+  listarNotificacionesQuerySchema,
+} from '../schemas/notificacion.schema';
 
 /**
  * GET /api/notificaciones
@@ -18,7 +23,8 @@ export async function listarNotificaciones(req: Request, res: Response): Promise
       return;
     }
 
-    const { soloNoLeidas } = req.query as { soloNoLeidas?: string };
+    // El query ya llega validado por listarNotificacionesQuerySchema.
+    const { soloNoLeidas } = req.query as unknown as z.infer<typeof listarNotificacionesQuerySchema>;
 
     const notificaciones = await prisma.notificacion.findMany({
       where: {
@@ -43,11 +49,8 @@ export async function listarNotificaciones(req: Request, res: Response): Promise
  */
 export async function marcarLeida(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    // El id ya llega validado (entero positivo) por notificacionIdParamsSchema.
+    const { id } = req.params as unknown as z.infer<typeof notificacionIdParamsSchema>;
 
     const usuarioToken = req.usuario;
     if (!usuarioToken) {

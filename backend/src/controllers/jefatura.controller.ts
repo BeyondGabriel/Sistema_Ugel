@@ -3,8 +3,14 @@
 // ===========================================================
 
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
+import {
+  crearJefaturaSchema,
+  editarJefaturaSchema,
+  jefaturaIdParamsSchema,
+} from '../schemas/jefatura.schema';
 
 /**
  * GET /api/jefaturas
@@ -33,12 +39,7 @@ export async function listarJefaturas(_req: Request, res: Response): Promise<voi
  */
 export async function crearJefatura(req: Request, res: Response): Promise<void> {
   try {
-    const { nombre, descripcion } = req.body as { nombre?: string; descripcion?: string };
-
-    if (!nombre) {
-      res.status(400).json({ mensaje: 'El nombre de la jefatura es obligatorio' });
-      return;
-    }
+    const { nombre, descripcion } = req.body as z.infer<typeof crearJefaturaSchema>;
 
     const existente = await prisma.jefatura.findUnique({ where: { nombre } });
     if (existente) {
@@ -63,11 +64,7 @@ export async function crearJefatura(req: Request, res: Response): Promise<void> 
  */
 export async function editarJefatura(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
-      res.status(400).json({ mensaje: 'El id proporcionado no es válido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof jefaturaIdParamsSchema>;
 
     const jefatura = await prisma.jefatura.findUnique({ where: { id } });
     if (!jefatura) {
@@ -75,7 +72,7 @@ export async function editarJefatura(req: Request, res: Response): Promise<void>
       return;
     }
 
-    const { nombre, descripcion } = req.body as { nombre?: string; descripcion?: string };
+    const { nombre, descripcion } = req.body as z.infer<typeof editarJefaturaSchema>;
 
     if (nombre && nombre !== jefatura.nombre) {
       const conflicto = await prisma.jefatura.findUnique({ where: { nombre } });
@@ -100,11 +97,7 @@ export async function editarJefatura(req: Request, res: Response): Promise<void>
 
 export async function eliminarJefatura(req: Request, res: Response): Promise<void> {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) {
-      res.status(400).json({ mensaje: 'ID inválido' });
-      return;
-    }
+    const { id } = req.params as unknown as z.infer<typeof jefaturaIdParamsSchema>;
 
     const jefatura = await prisma.jefatura.findUnique({ where: { id } });
     if (!jefatura) {
