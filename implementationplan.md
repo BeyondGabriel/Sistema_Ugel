@@ -529,3 +529,121 @@ Confirma cómo continuar:
 - **(a)** apruebas el diagnóstico de los 3 bloques y procedo a **implementar** las correcciones (empezando por A-01 y B-01); o
 - **(b)** quieres ajustar el alcance/severidades antes de implementar; o
 - **(c)** prefieres que primero consolide un **plan de implementación unificado** del Punto 5 (orden, dependencias y archivos a tocar) sin ejecutar código todavía.
+
+---
+
+# Punto 6 — Seguridad de Webhooks
+
+> **Auditoría estática (solo lectura).** Entregable de diagnóstico del **Punto 6 — Seguridad del webhook de firma externa**. En este turno **no se modificó ningún archivo fuente** (backend 100 % intacto). La única escritura es este documento.
+> **Archivos inspeccionados (lectura completa):**
+> - `backend/src/routes/firmaExterna.routes.ts`
+> - `backend/src/controllers/firmaExterna.controller.ts`
+> - `backend/src/schemas/firmaExterna.schema.ts`
+> - `backend/src/app.ts` (middlewares de parseo de cuerpo y orden de registro)
+> - `backend/src/middlewares/rateLimit.ts`
+> - `backend/src/middlewares/validate.ts`
+> - `backend/prisma/schema.prisma` (modelo `Papeleta` y enum `EstadoPapeleta`)
+
+## 6.1 Superficie analizada
+
+| Elemento | Ubicación | Rol |
+|---|---|---|
+| Ruta | `firmaExterna.routes.ts` L14–18 | `POST /webhook` → `validate(webhookFirmaSchema,'body')` → `webhookFirma` |
+| Montaje | `app.ts` L53 | `app.use('/api/firmas', firmaExternaRoutes)` **antes** del blindaje `authJWT` (L63) |
+| Controlador | `firmaExterna.controller.ts` L34–81 | `webhookFirma` |
+| Esquema | `firmaExterna.schema.ts` L72–87 | `webhookFirmaSchema` (`.strict()`) |
+
+Cadena efectiva de la petición:
+`cors → helmet → express.json({limit:'100kb'}) → firmaExterna.routes → validate(body) → webhookFirma`
+**No existe rate limiter ni middleware de firma HMAC en ningún punto de la cadena.**
+
+## 6.2 Diagnóstico de hallazgos
+
+### H1 — Comparación no constante → **[RESUELTO en Punto 5, con residuo menor]**
+Estado real leído (`firmaExterna.controller.ts`):
+- L17–26 helper `compararSecretosTiempoConstante` usando `crypto.timingSafeEqual` sobre buffers UTF‑8.
+- L46 `if (!secretRecibido || !compararSecretosTiempoConstante(secretRecibido, secretEsperado))`.
+
+La comparación **ya es de tiempo constante**; el vector de *timing attack* sobre el contenido quedó mitigado en el Punto 5.
+**Residuo (H1-b, Baja):** L21–23 retorna `false` de inmediato si difieren las longitudes (`bufferRecibido.length !== bufferEsperado.length`). Ese *early-return* depende de la longitud del secreto esperado → filtra su **longitud** (no su contenido) por temporización. Endurecimiento: comparar `HMAC(recibido)` vs `HMAC(esperado)` (buffers de 32 bytes fijos).
+
+### H2 — Falta de rate limiting específico → **[CONFIRMADO / ABIERTO]**
+- `firmaExterna.routes.ts` L14–18 registra **solo** `validate(webhookFirmaSchema,'body')` y `webhookFirma`; **no** importa ni aplica ningún limitador.
+- `app.ts` L35–45 solo monta `cors`, `helmet()` y `express.json({limit:'100kb'})`. **No existe un rate limiter global** en `/api`.
+- Los limitadores del proyecto son **por ruta** (`rateLimitLogin`, `rateLimitCambiarPassword`, `rateLimitVerificarToken` en `rateLimit.ts`) y **ninguno** cubre `/api/firmas/webhook`.
+- El webhook se monta **antes** de `app.use('/api', authJWT, exigirCambioPassword)` (L63), por lo que queda al margen de cualquier capa añadida al router protegido.
+**Consecuencia:** intentos ilimitados por IP → adivinación por fuerza bruta del `x-webhook-secret` y abuso de recursos (DoS de aplicación).
+
+### H3 — Autenticación solo con secreto estático (sin HMAC ni anti-replay) → **[CONFIRMADO / ABIERTO]**
+Fragmento exacto leído (`firmaExterna.controller.ts` L36–49):
+
+```ts
+const secretRecibido = req.header('x-webhook-secret');
+const secretEsperado = process.env.WEBHOOK_SECRET;
+if (!secretEsperado) { /* 500 */ }
+if (!secretRecibido || !compararSecretosTiempoConstante(secretRecibido, secretEsperado)) {
+  res.status(401).json({ mensaje: 'Clave de webhook inválida' });
+  return;
+}
+```
+
+- La autenticidad depende **solo** del header estático `x-webhook-secret`; **no** se valida firma **HMAC‑SHA256 del cuerpo**.
+- **No** hay `timestamp` ni `nonce` → una captura legítima puede **replicarse indefinidamente (replay)** mientras el secreto siga vigente.
+- Secreto **compartido y de rotación manual** (`WEBHOOK_SECRET`); un filtrado habilita escritura de firmas hasta rotarlo.
+
+### H4 — Integridad de estado e idempotencia (añadido en este turno) → **[ABIERTO]**
+Fragmento leído (`firmaExterna.controller.ts` L54–74):
+- L60–69 bloquea solo `ANULADO` y `CANCELADO` (409). **No** bloquea `RECHAZADO` ni estados no firmables (`PENDIENTE`, `EN_REVISION`, `OBSERVADO`, `ANULACION_SOLICITADA`).
+- L71–74 ejecuta `prisma.papeleta.update({ data: { firmaExternaSvg: svgUrl } })` **incondicionalmente**: no comprueba si la papeleta **ya estaba firmada**.
+
+**Consecuencias:** (a) operación **no idempotente** → *last-write-wins* y **sobreescritura de una firma existente** con un `svgUrl` distinto (vector de *tamper* por replay); (b) se puede adjuntar firma a una papeleta `RECHAZADO`.
+**Regla de negocio:** la firma externa solo aplica a una papeleta **vigente y firmable** (en el flujo actual, `APROBADO`); cualquier otro estado → 409.
+
+### Resumen de severidades (Punto 6)
+
+| Id | Hallazgo | Severidad | Estado |
+|---|---|---|---|
+| H1 | Comparación del secreto | — (resuelto) | Cerrado en Punto 5 |
+| H1-b | Fuga de longitud por *early-return* | Baja | Abierto |
+| H2 | Sin rate limiting en `/api/firmas/webhook` | Alto | Abierto |
+| H3 | Secreto estático sin HMAC ni anti-replay | Alto | Abierto |
+| H4 | Sobreescritura de firma + estados no firmables | Medio | Abierto |
+
+
+## 6.3 Plan de acción técnico (SIGUIENTE PASO — PENDIENTE DE APROBACIÓN, sin ejecutar)
+
+> Ninguna de estas acciones se ejecutó en este turno. Requieren aprobación previa.
+
+1. **Rate limiting específico (H2).**
+   - Añadir en `backend/src/middlewares/rateLimit.ts` un `rateLimitWebhookFirma` con `windowMs: 15*60*1000`, `limit: 10`, `standardHeaders: 'draft-7'`, `legacyHeaders: false` y `message` propio (mismo patrón que `rateLimitVerificarToken`).
+   - Aplicarlo en `firmaExterna.routes.ts` **como primer middleware** de `POST /webhook`, antes de `validate(...)` y de la lógica de negocio.
+2. **Firma HMAC + anti-replay (H3).**
+   - Nuevo middleware `verificarFirmaWebhook` (p. ej. `backend/src/middlewares/webhookSignature.ts`) que:
+     - lea `x-webhook-signature` (hex HMAC‑SHA256) y `x-webhook-timestamp`;
+     - rechace si `|Date.now() − timestamp| > 300 s` (ventana anti-replay temporal);
+     - recalcule `HMAC-SHA256(WEBHOOK_SECRET, timestamp + "." + rawBody)` y lo compare con `crypto.timingSafeEqual` (buffers de longitud fija);
+     - opcionalmente deduplique mediante `x-webhook-nonce` dentro de la ventana.
+   - Requiere exponer el **cuerpo crudo**: añadir en `app.ts` `express.json({ limit:'100kb', verify: (req,_res,buf)=>{ (req as any).rawBody = buf } })` (o suscribir el middleware solo a la ruta del webhook).
+   - Mantener `x-webhook-secret` como compatibilidad temporal o retirarlo una vez migrado el emisor (Supabase).
+3. **Idempotencia y validación de estado (H4).**
+   - Definir el conjunto firmable (p. ej. `APROBADO`) y responder 409 para el resto (`ANULADO`, `CANCELADO`, `RECHAZADO`, `PENDIENTE`, `EN_REVISION`, `OBSERVADO`, `ANULACION_SOLICITADA`).
+   - Idempotencia: si `papeleta.firmaExternaSvg === svgUrl` → **200** sin escribir (no-op); si ya existe una firma con valor distinto → **409** (conflicto), salvo rotación explícita.
+   - Escritura condicional/atómica (p. ej. `updateMany` con `where` que incluya `firmaExternaSvg: null` y estado firmable, verificando `count === 1`) para eliminar la carrera *check-then-write*.
+4. **Endurecer H1-b.** Sustituir la comparación directa por comparación de HMAC (longitud fija) para no depender de la longitud del secreto.
+5. **Limpieza Punto 4 (opcional).** Sustituir el cast `req.body as z.infer<typeof webhookFirmaSchema>` (L52) por el patrón de consumo tipado del proyecto; no es una vulnerabilidad.
+
+## 6.4 Reglas de idempotencia y validación de estado de la Papeleta
+
+1. **Existencia:** si la papeleta no existe → **404**.
+2. **Estados firmables (whitelist):** solo `APROBADO`. Cualquier otro estado → **409** incluyendo el estado actual en el mensaje.
+3. **Idempotencia estricta por contenido:**
+   - Misma `(papeletaId, svgUrl)` que la firma ya registrada → **200** (no-op; no se reescribe).
+   - `papeletaId` ya firmado con **otro** `svgUrl` → **409** (se preserva la firma original; impide *tamper* por replay).
+4. **Atomicidad:** la comprobación de estado + firma nula y la escritura deben ocurrir en una sola operación condicional para eliminar la ventana *check-then-write*.
+5. **Sin migración de esquema:** la idempotencia se apoya en `firmaExternaSvg` (`String?`) y `estado` (`EstadoPapeleta`) ya existentes en `schema.prisma`; no se añaden campos (coherente con la restricción del Punto 5).
+6. **Trazabilidad (opcional, requiere decisión):** hoy no existe un campo dedicado a la fecha de firma; evaluar un log de auditoría para registrar el momento de la firma.
+
+## 6.5 Conclusión del diagnóstico
+
+El webhook heredó del Punto 5 la **comparación en tiempo constante** (H1 resuelto) y el **bloqueo de `ANULADO`/`CANCELADO`**. Persisten, confirmados sobre el código real, **H2** (ausencia total de rate limiting) y **H3** (secreto estático sin HMAC ni anti-replay), más un **H4** de integridad/idempotencia, y un residuo **H1-b** (fuga de longitud). Continuarán como hallazgos del Punto 6. **No se modificó ningún archivo `.ts`/`.tsx` en este turno.**
+

@@ -1616,25 +1616,26 @@ Correcciones principales:
 | 3 | Rate limiting | ✅ Implementado y probado |
 | 4 | Validación estructurada de entradas | ✅ Implementado y probado |
 | 5 | Revisión de roles y autorización | ✅ Implementado y probado |
-| 6 | Endurecimiento del webhook de firma y revocación de sesiones | ⏳ Pendiente |
+| 6 | Endurecimiento del webhook de firma y revocación de sesiones | ✅ Implementado y probado |
 
 ---
 
 # Hallazgos transferidos al Punto 6
 
-El **Punto 5 — Roles y Autorización** resolvió la mayoría de los hallazgos de su alcance. Los siguientes se delegan **intencionalmente** al **Punto 6 — Endurecimiento de Seguridad** para preservar el modelo relacional actual de Prisma (evitar migraciones de esquema):
+El **Punto 5 — Roles y Autorización** resolvió la mayoría de los hallazgos de su alcance. El **endurecimiento del webhook de firma** se completó en el **Punto 6 — Seguridad de Webhooks**. Los puntos que aún requieren migración de esquema Prisma (evitar cambios de modelo) se detallan a continuación y permanecen pendientes:
 
 - **H-07 — Revocación instantánea de sesiones:** inferencia de `tokenVersion` / `passwordChangedAt` en el modelo Prisma para invalidar tokens vigentes al cambiar la contraseña o al requerir el cierre inmediato de sesiones.
-- **B-01 (Remanentes) — Endurecimiento criptográfico del Webhook de firma:** firmas **HMAC** del cuerpo, **`timestamp`/`nonce` anti-replay** y **rate limiting** en `POST /api/firmas/webhook`. *(La comparación del secreto en tiempo constante ya se implementó en el Punto 5.)*
+- **B-01 (Remanentes) — ~~Endurecimiento criptográfico del Webhook de firma~~ → [RESUELTO en Punto 6]:** firmas **HMAC-SHA256** del cuerpo, **`timestamp`/`nonce` anti-replay** y **rate limiting** (5 req / 15 min) en `POST /api/firmas/webhook`. La comparación del secreto en tiempo constante se implementó en el Punto 5 y se reforzó en el Punto 6 (residuo **H1-b**).
 - **B-03 (Remanentes) — Auditoría de autor en Asistencias:** inyección de `registradoPorId` / `editadoPorId` en el modelo `Movimiento` (requiere migración de esquema Prisma).
 
-Antecedentes del webhook (dominio original del Punto 6):
+Antecedentes del webhook (dominio original del Punto 6) — **todos resueltos**:
 
-- **H1 — ~~Comparación no resistente a ataques de temporización~~ → [RESUELTO en Punto 5]:** el secreto del header `x-webhook-secret` se compara ahora con `crypto.timingSafeEqual` (tiempo constante).
-- **H2 — Ausencia de rate limiting en el webhook:** a diferencia de `POST /api/auth/login` y `POST /api/papeletas/verificar-token`, la ruta del webhook todavía no tiene limitador. **Transferido al Punto 6.**
-- **H3 — Autenticación basada solo en secreto estático (sin HMAC ni anti-replay):** no se valida una firma HMAC del cuerpo ni un `timestamp`/`nonce`. **Transferido al Punto 6.**
+- **H1 — ~~Comparación no resistente a ataques de temporización~~ → [RESUELTO en Punto 5, reforzado en Punto 6]:** el secreto se compara en tiempo constante. En el Punto 6 se eliminó además el residuo **H1-b** (fuga de longitud del antiguo *early-return*): ahora se calcula un **HMAC-SHA256 de longitud fija (32 bytes)** sobre cada valor y se comparan con `crypto.timingSafeEqual`, de modo que la comparación ya no depende de la longitud de las entradas.
+- **H2 — ~~Ausencia de rate limiting en el webhook~~ → [RESUELTO en Punto 6]:** se inyectó el limitador específico **`rateLimitWebhookFirma`** (**5 peticiones / 15 minutos** por IP, `standardHeaders: 'draft-7'`, `legacyHeaders: false`) como **primer middleware** de `POST /api/firmas/webhook`, antes de `validate(...)` y del controlador.
+- **H3 — ~~Autenticación basada solo en secreto estático (sin HMAC ni anti-replay)~~ → [RESUELTO en Punto 6]:** se implementó un **flujo dual de firma HMAC**: si llegan `x-webhook-signature` + `x-webhook-timestamp` se verifica la firma `HMAC-SHA256(`${timestamp}.${rawBody}`)` sobre el **cuerpo crudo** capturado en `req.rawBody` y se aplica una **ventana anti-replay de 300 segundos** frente a `Date.now()`; si no, se admite la retrocompatibilidad con `x-webhook-secret` (comparación en tiempo constante). La ausencia de credenciales o un fallo de firma responden **HTTP 401**.
+- **H4 (nuevo) — ~~Falta de idempotencia y sobreescritura de firmas~~ → [RESUELTO en Punto 6]:** el webhook ahora valida la **existencia** de la papeleta (**404**), aplica una **whitelist de estado** (solo `APROBADO`; cualquier otro estado responde **409**), es **idempotente por contenido** (misma firma → **200** sin reescribir; firma distinta → **409** evita la sobreescritura) y escribe de forma **atómica y condicional** mediante `updateMany` con guarda de estado `APROBADO` y firma nula.
 
-> El mecanismo de autenticación por `x-webhook-secret` existe y ya usa comparación en tiempo constante; H2–H3, H-07 y los remanentes de B-01/B-03 se atenderán en el Punto 6.
+> Con esto quedan **cerrados** los hallazgos del webhook **H1, H1-b, H2, H3 y H4**. Permanecen pendientes **H-07** (revocación instantánea de sesiones) y **B-03** (auditoría de autor en Asistencias), ambos por requerir migración de esquema Prisma.
 
 ---
 

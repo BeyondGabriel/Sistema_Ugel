@@ -61,3 +61,23 @@ export const rateLimitVerificarToken = rateLimit({
       'Demasiados intentos de verificación. Intente nuevamente más tarde.',
   },
 });
+
+/**
+ * Limita las peticiones al webhook de firma externa (Punto 6 — H2).
+ *
+ * 5 solicitudes por cada 15 minutos desde una misma IP.
+ *
+ * Es la única ruta de escritura sin authJWT; este limitador es la primera
+ * capa contra la adivinación por fuerza bruta del secreto y contra el abuso
+ * de recursos.
+ */
+export const rateLimitWebhookFirma = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: {
+    mensaje:
+      'Demasiadas solicitudes enviadas al webhook. Por favor, intente más tarde.',
+  },
+});

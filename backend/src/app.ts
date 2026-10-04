@@ -42,7 +42,18 @@ app.use(
 app.use(helmet());
 
 // H-10: límite explícito del cuerpo JSON para mitigar DoS por payloads grandes.
-app.use(express.json({ limit: '100kb' }));
+// Punto 6: se conserva el buffer crudo del webhook en req.rawBody para poder
+// verificar la firma HMAC-SHA256 sobre el cuerpo exacto recibido.
+app.use(
+  express.json({
+    limit: '100kb',
+    verify: (req: any, _res, buf) => {
+      if (req.url?.includes('/webhook')) {
+        req.rawBody = buf;
+      }
+    },
+  })
+);
 
 // Rutas de autenticación (login público; cambiar-password y mi-perfil ya
 // traen authJWT y su validación de entrada).
