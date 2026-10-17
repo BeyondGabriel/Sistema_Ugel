@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PlusIcon,
@@ -15,6 +15,8 @@ import {
 import { papeletaService } from '../../services/papeleta.service';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useSocket } from '../../hooks/useSocket';
+import type { CambioPapeleta } from '../../contexts/SocketContext';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { Papeleta, EstadoPapeleta } from '../../types';
@@ -112,6 +114,7 @@ function ModalTexto({ isOpen, title, placeholder, onConfirmar, onClose, cargando
 export function PapeletasPage() {
   const { user } = useAuth();
   const { mostrar } = useToast();
+  const { papeletaCambios } = useSocket();
 
   const [papeletas, setPapeletas] = useState<Papeleta[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -129,8 +132,10 @@ export function PapeletasPage() {
   const [modalAnulacion, setModalAnulacion] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
   const [modalCancelar, setModalCancelar] = useState<{ isOpen: boolean; id: number | null }>({ isOpen: false, id: null });
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  const cargar = useCallback(async (silencioso = false) => {
+    // Los refrescos disparados por socket no muestran el spinner: así la lista
+    // no parpadea ni se pierde la posición de scroll.
+    if (!silencioso) setCargando(true);
     try {
       const data = await papeletaService.listarPapeletas({
         fechaInicio: fechaInicio || undefined,
@@ -140,11 +145,32 @@ export function PapeletasPage() {
     } catch {
       mostrar('Error al cargar las papeletas', 'error');
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
   }, [fechaInicio, fechaFin, mostrar]);
 
+  // ─── refresco en vivo por Socket.IO ─────────────────────
+  const ultimoCambio: CambioPapeleta | undefined = papeletaCambios[0];
+
+  // Cambio ya atendido (incluido el que existiera al montar): evita duplicar
+  // la carga inicial y el refetch que ya disparan los cambios de filtros.
+  const cambioAtendido = useRef(ultimoCambio);
+
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Cada cambio de estado recibido en vivo recarga el listado. El debounce de
+  // 300 ms agrupa ráfagas (p. ej. timeout de revisión + transición del control).
+  useEffect(() => {
+    if (!ultimoCambio || ultimoCambio === cambioAtendido.current) return;
+
+    cambioAtendido.current = ultimoCambio;
+
+    const timer = setTimeout(() => {
+      void cargar(true);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [ultimoCambio, cargar]);
 
   async function accion(id: number, fn: () => Promise<Papeleta>, mensajeOk: string) {
     setAccionId(id);

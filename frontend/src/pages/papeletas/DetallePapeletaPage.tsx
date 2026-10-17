@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeftIcon,
@@ -11,6 +11,8 @@ import {
 import { papeletaService } from '../../services/papeleta.service';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useSocket } from '../../hooks/useSocket';
+import type { CambioPapeleta } from '../../contexts/SocketContext';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
@@ -69,6 +71,7 @@ export function DetallePapeletaPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { mostrar } = useToast();
+  const { papeletaCambios } = useSocket();
 
   const [papeleta, setPapeleta] = useState<Papeleta | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -83,9 +86,11 @@ export function DetallePapeletaPage() {
   const [errorTexto, setErrorTexto] = useState('');
   const [modalCancelar, setModalCancelar] = useState(false);
 
-  async function cargar() {
+  async function cargar(silencioso = false) {
     if (!id) return;
-    setCargando(true);
+    // Los refrescos disparados por socket no muestran el spinner: así el
+    // detalle no se desmonta ni parpadea.
+    if (!silencioso) setCargando(true);
     try {
       const data = await papeletaService.obtenerPapeleta(Number(id));
       setPapeleta(data);
@@ -93,13 +98,36 @@ export function DetallePapeletaPage() {
       mostrar('No se pudo cargar la papeleta', 'error');
       navigate('/papeletas');
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
   }
 
   useEffect(() => {
     cargar();
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── refresco en vivo por Socket.IO ─────────────────────
+  const ultimoCambio: CambioPapeleta | undefined = papeletaCambios[0];
+
+  // Cambio ya atendido (incluye el que existiera al montar): la carga inicial
+  // de arriba ya trae el estado actual.
+  const cambioAtendido = useRef(ultimoCambio);
+
+  // Recarga el detalle solo si el último cambio corresponde a esta papeleta,
+  // con debounce de 300 ms para agrupar ráfagas de eventos.
+  useEffect(() => {
+    if (!ultimoCambio || !id) return;
+    if (ultimoCambio.papeletaId !== Number(id)) return;
+    if (ultimoCambio === cambioAtendido.current) return;
+
+    cambioAtendido.current = ultimoCambio;
+
+    const timer = setTimeout(() => {
+      void cargar(true);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [ultimoCambio, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function extractMsg(err: unknown): string {
     return (

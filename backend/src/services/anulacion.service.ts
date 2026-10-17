@@ -7,6 +7,8 @@ import { EstadoPapeleta, TipoTiempo, TipoMovimiento, Papeleta } from '@prisma/cl
 import prisma from '../utils/prisma';
 import { obtenerRangoDelDia } from '../utils/fechas';
 import { notificar } from './notificacion.service';
+import { destinatariosCambioPapeleta } from './papeleta.service';
+import { emitirCambioPapeleta } from '../sockets/io';
 
 export interface ResultadoPuedeAnular {
   permitido: boolean;
@@ -79,10 +81,17 @@ export async function cerrarSolicitudesExpiradas(): Promise<void> {
     const resultado = await puedeAnular(papeleta, false);
 
     if (!resultado.permitido) {
-      await prisma.papeleta.update({
+      const papeletaRevertida = await prisma.papeleta.update({
         where: { id: papeleta.id },
         data: { estado: EstadoPapeleta.APROBADO },
       });
+
+      // Aviso en vivo: la solicitud de anulación expiró y vuelve a APROBADO.
+      emitirCambioPapeleta(
+        destinatariosCambioPapeleta(papeletaRevertida),
+        papeletaRevertida.id,
+        papeletaRevertida.estado
+      );
 
       notificar(
         papeleta.solicitanteId,

@@ -14,6 +14,7 @@ import {
   aplicarBloqueos,
   revertirSiExpiro,
   esAprobadorVigente,
+  destinatariosCambioPapeleta,
 } from '../services/papeleta.service';
 import { notificar } from '../services/notificacion.service';
 import { parseFechaLocal } from '../utils/fechas';
@@ -25,6 +26,7 @@ import {
   papeletaIdParamsSchema,
   listarPapeletasQuerySchema,
 } from '../schemas/papeleta.schema';
+import { emitirCambioPapeleta } from '../sockets/io';
 
 /**
  * POST /api/papeletas
@@ -91,6 +93,15 @@ export async function crearPapeleta(
 
       return tx.papeleta.create({ data: datos });
     });
+
+    // Aviso en vivo a solicitante y aprobador (decisión de diseño #2): al
+    // aprobador le aparece la papeleta nueva en su bandeja sin recargar y la
+    // Directora (auto-aprobada, sin aprobador) refresca su propia lista.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(nuevaPapeleta),
+      nuevaPapeleta.id,
+      nuevaPapeleta.estado
+    );
 
     res.status(201).json({ papeleta: nuevaPapeleta });
   } catch (error) {
@@ -320,6 +331,13 @@ export async function iniciarRevision(
       },
     });
 
+    // Aviso en vivo: el solicitante ve que su papeleta entró en revisión.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
+
     res.status(200).json({
       papeleta: papeletaActualizada,
     });
@@ -400,6 +418,14 @@ export async function aprobarPapeleta(
 
     await aplicarBloqueos(papeletaActualizada.id);
 
+    // Aviso en vivo (tras aplicar bloqueos, para que el refetch del cliente
+    // ya vea la papeleta completamente consistente).
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
+
     notificar(
       papeletaActualizada.solicitanteId,
       `Su papeleta ${papeletaActualizada.numero} fue aprobada. Token de verificación: ${token}`
@@ -479,6 +505,13 @@ export async function rechazarPapeleta(
         motivoRechazo,
       },
     });
+
+    // Aviso en vivo: el solicitante ve el rechazo sin recargar.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
 
     notificar(
       papeletaActualizada.solicitanteId,
@@ -561,6 +594,13 @@ export async function observarPapeleta(
       },
     });
 
+    // Aviso en vivo: el solicitante ve la observación sin recargar.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
+
     notificar(
       papeletaActualizada.solicitanteId,
       `Su papeleta ${papeletaActualizada.numero} fue observada. Comentario: ${comentario}`
@@ -631,6 +671,13 @@ export async function cancelarPapeleta(
       where: { id },
       data: { estado: EstadoPapeleta.CANCELADO },
     });
+
+    // Aviso en vivo: el aprobador ve la cancelación sin recargar.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
 
     res.status(200).json({
       papeleta: papeletaActualizada,
@@ -709,6 +756,13 @@ export async function reenviarPapeleta(
         motivoRechazo: null,
       },
     });
+
+    // Aviso en vivo: el aprobador ve la papeleta reenviada sin recargar.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
 
     res.status(200).json({
       papeleta: papeletaActualizada,

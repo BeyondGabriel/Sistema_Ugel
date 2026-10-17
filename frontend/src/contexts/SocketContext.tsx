@@ -10,25 +10,44 @@ import { getToken } from '../services/api';
 import { useToast } from '../hooks/useToast';
 import type { Notificacion } from '../types';
 
+/**
+ * Último cambio de estado de papeleta recibido por Socket.IO. El payload es
+ * mínimo a propósito: cada página reacciona recargando sus datos de forma
+ * autenticada (y por tanto respetando la visibilidad de cada rol).
+ */
+export interface CambioPapeleta {
+  papeletaId: number;
+  estado: string;
+}
+
 export interface SocketContextValue {
   socket: Socket | null;
   notificacionesSocket: Omit<Notificacion, 'usuarioId'>[];
   limpiarNotificacionesSocket: () => void;
+  papeletaCambios: CambioPapeleta[];
+  limpiarPapeletaCambios: () => void;
 }
 
 export const SocketContext = createContext<SocketContextValue>({
   socket: null,
   notificacionesSocket: [],
   limpiarNotificacionesSocket: () => {},
+  papeletaCambios: [],
+  limpiarPapeletaCambios: () => {},
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [notificacionesSocket, setNotificacionesSocket] = useState<Omit<Notificacion, 'usuarioId'>[]>([]);
+  const [papeletaCambios, setPapeletaCambios] = useState<CambioPapeleta[]>([]);
   const { mostrar } = useToast();
 
   const limpiarNotificacionesSocket = useCallback(() => {
     setNotificacionesSocket([]);
+  }, []);
+
+  const limpiarPapeletaCambios = useCallback(() => {
+    setPapeletaCambios([]);
   }, []);
 
   useEffect(() => {
@@ -57,6 +76,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       mostrar(payload.mensaje, 'info');
     });
 
+    // Cambios de estado de papeletas (solicitante y aprobador). Solo se
+    // acumulan los 20 últimos: las páginas hacen refetch con debounce y solo
+    // necesitan saber que algo cambió (y, en el detalle, cuál papeleta).
+    s.on('papeleta:cambio', (payload: CambioPapeleta) => {
+      setPapeletaCambios((prev) =>
+        [{ papeletaId: payload.papeletaId, estado: payload.estado }, ...prev].slice(0, 20)
+      );
+    });
+
     s.on('disconnect', () => {
       console.log('[Socket.IO] Desconectado');
     });
@@ -71,7 +99,15 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   }, [getToken()]); // Reconecta cuando cambia el token (login/logout)
 
   return (
-    <SocketContext.Provider value={{ socket, notificacionesSocket, limpiarNotificacionesSocket }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        notificacionesSocket,
+        limpiarNotificacionesSocket,
+        papeletaCambios,
+        limpiarPapeletaCambios,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

@@ -8,8 +8,9 @@ import prisma from '../utils/prisma';
 import { puedeAnular } from '../services/anulacion.service';
 import { liberarBloqueoPapeleta } from '../services/bloqueos.service';
 import { notificar } from '../services/notificacion.service';
-import { esAprobadorVigente } from '../services/papeleta.service';
+import { destinatariosCambioPapeleta, esAprobadorVigente } from '../services/papeleta.service';
 import { usuarioPuedeVerPapeleta } from '../services/visibilidadPapeletas.service';
+import { emitirCambioPapeleta } from '../sockets/io';
 
 /**
  * Roles que, por su función operativa (control de puerta), necesitan poder
@@ -91,6 +92,14 @@ export async function anularPapeleta(req: Request, res: Response): Promise<void>
 
     await liberarBloqueoPapeleta(papeletaActualizada.id);
 
+    // Aviso en vivo a solicitante y aprobador (el admin anulador solo entra
+    // si además es el aprobador, ya cubierto por aprobadorId).
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
+
     notificar(
       papeletaActualizada.solicitanteId,
       `Su papeleta ${papeletaActualizada.numero} fue anulada. Motivo: ${motivoAnulacion}`,
@@ -144,6 +153,13 @@ export async function solicitarAnulacion(req: Request, res: Response): Promise<v
       where: { id },
       data: { estado: EstadoPapeleta.ANULACION_SOLICITADA },
     });
+
+    // Aviso en vivo: el aprobador debe ver la solicitud sin recargar.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
 
     if (papeletaActualizada.aprobadorId) {
       notificar(
@@ -200,6 +216,13 @@ export async function cancelarSolicitudAnulacion(req: Request, res: Response): P
       where: { id },
       data: { estado: EstadoPapeleta.APROBADO },
     });
+
+    // Aviso en vivo: la papeleta vuelve a APROBADO.
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
 
     res.status(200).json({ papeleta: papeletaActualizada });
   } catch (error) {

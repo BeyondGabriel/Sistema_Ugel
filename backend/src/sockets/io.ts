@@ -29,3 +29,36 @@ export function inicializarSocket(io: Server): void {
 export function getIO(): Server | null {
   return _io;
 }
+
+/**
+ * Avisa en tiempo real de que una papeleta cambió de estado.
+ *
+ * Destinatarios: solo las salas personales `usuario:<id>` (nunca broadcasts
+ * ni salas globales). El payload es deliberadamente mínimo (id + estado):
+ * el frontend reacciona haciendo un refetch autenticado, que ya respeta las
+ * reglas de visibilidad de cada rol.
+ */
+export function emitirCambioPapeleta(
+  destinatarios: number[],
+  papeletaId: number,
+  estado: string
+): void {
+  const io = getIO();
+  if (!io) {
+    // Servidor todavía arrancando: no hay clientes conectados que avisar.
+    return;
+  }
+
+  // El Set deduplica (p. ej. solicitante === aprobador) y el filtro descarta
+  // ids inválidos (NaN, negativos o cero) antes de tocar Socket.IO.
+  const ids = new Set<number>();
+  for (const id of destinatarios) {
+    if (Number.isInteger(id) && id > 0) {
+      ids.add(id);
+    }
+  }
+
+  for (const id of ids) {
+    io.to(`usuario:${id}`).emit('papeleta:cambio', { papeletaId, estado });
+  }
+}

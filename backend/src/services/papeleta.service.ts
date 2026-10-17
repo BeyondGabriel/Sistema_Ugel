@@ -8,6 +8,7 @@ import prisma from '../utils/prisma';
 import { generarToken, generarTokenUnico } from '../utils/tokenGenerator';
 import { bloquearRangoPapeleta } from './bloqueos.service';
 import { notificar } from './notificacion.service';
+import { emitirCambioPapeleta } from '../sockets/io';
 
 /** Re-exportados para no romper a quienes ya importan estas funciones desde aquí. */
 export { generarToken, generarTokenUnico };
@@ -174,6 +175,20 @@ export function haExpiradoRevision(papeleta: {
 }
 
 /**
+ * Destinatarios de un evento de cambio de estado de papeleta: el solicitante
+ * y, si existe, el aprobador asignado. Se descartan los nulos para que el
+ * helper de Socket.IO reciba solo ids reales.
+ */
+export function destinatariosCambioPapeleta(papeleta: {
+  solicitanteId: number;
+  aprobadorId: number | null;
+}): number[] {
+  return [papeleta.solicitanteId, papeleta.aprobadorId].filter(
+    (id): id is number => id !== null
+  );
+}
+
+/**
  * Si la papeleta dada tiene su revisión expirada, la revierte a PENDIENTE
  * de inmediato (limpiando fechaRevision) y notifica al solicitante.
  * Devuelve la papeleta actualizada (o la misma, sin cambios, si no había
@@ -189,6 +204,13 @@ export async function revertirSiExpiro<T extends Papeleta>(papeleta: T): Promise
     where: { id: papeleta.id },
     data: { estado: EstadoPapeleta.PENDIENTE, fechaRevision: null },
   });
+
+  // Aviso en vivo: la papeleta vuelve a la cola de revisión.
+  emitirCambioPapeleta(
+    destinatariosCambioPapeleta(papeletaActualizada),
+    papeletaActualizada.id,
+    papeletaActualizada.estado
+  );
 
   notificar(
     papeleta.solicitanteId,
