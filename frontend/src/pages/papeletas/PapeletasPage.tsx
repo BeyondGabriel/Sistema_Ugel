@@ -18,6 +18,7 @@ import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { Papeleta, EstadoPapeleta } from '../../types';
+import { fechaHaceMesesLocal, fechaHoyLocal } from '../../utils/fechaHora';
 
 // ─── helpers ────────────────────────────────────────────
 
@@ -30,16 +31,6 @@ function formatHora(ts: string): string {
     minute: '2-digit',
     hour12: false,
   });
-}
-
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function haceUnMesISO(): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 1);
-  return d.toISOString().slice(0, 10);
 }
 
 const TABS: { label: string; estados: EstadoPapeleta[] }[] = [
@@ -128,8 +119,8 @@ export function PapeletasPage() {
   const [exportando, setExportando] = useState(false);
 
   // Filtros por defecto: desde hace un mes hasta hoy
-  const [fechaInicio, setFechaInicio] = useState(haceUnMesISO());
-  const [fechaFin, setFechaFin] = useState(hoyISO());
+  const [fechaInicio, setFechaInicio] = useState(fechaHaceMesesLocal(1));
+  const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
 
   const [accionId, setAccionId] = useState<number | null>(null);
 

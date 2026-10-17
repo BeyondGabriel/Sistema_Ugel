@@ -4,8 +4,14 @@ type Variante = 'primary' | 'secondary' | 'danger' | 'ghost';
 type Tamano = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** API original del componente (en español). */
   variante?: Variante;
+  /** Alias en inglés: las páginas lo usan como `variant`. Se normaliza a `variante`. */
+  variant?: Variante;
+  /** API original del componente (en español). */
   tamano?: Tamano;
+  /** Alias en inglés: las páginas lo usan como `size`. Se normaliza a `tamano`. */
+  size?: Tamano;
   cargando?: boolean;
   icono?: ReactNode;
   iconoDerecho?: ReactNode;
@@ -31,8 +37,10 @@ const clasesPorTamano: Record<Tamano, string> = {
 };
 
 export function Button({
-  variante = 'primary',
-  tamano = 'md',
+  variante,
+  variant,
+  tamano,
+  size,
   cargando = false,
   icono,
   iconoDerecho,
@@ -42,6 +50,13 @@ export function Button({
   className = '',
   ...props
 }: ButtonProps) {
+  // El componente nació con la API en español (`variante`/`tamano`); las páginas
+  // lo consumen con los alias en inglés (`variant`/`size`). Se aceptan ambos
+  // nombres para no romper a ningún consumidor y aquí se normalizan: el resto
+  // del componente trabaja sólo con las variables `*Final`.
+  const varianteFinal: Variante = variante ?? variant ?? 'primary';
+  const tamanoFinal: Tamano = tamano ?? size ?? 'md';
+
   return (
     <button
       {...props}
@@ -50,8 +65,8 @@ export function Button({
         'inline-flex items-center justify-center gap-2 rounded-lg border font-medium',
         'transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        clasesPorVariante[variante],
-        clasesPorTamano[tamano],
+        clasesPorVariante[varianteFinal],
+        clasesPorTamano[tamanoFinal],
         fullWidth ? 'w-full' : '',
         className,
       ].join(' ')}

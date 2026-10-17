@@ -4,6 +4,7 @@
 
 import { api } from './api';
 import type { Movimiento } from '../types';
+import { fechaHoyLocal } from '../utils/fechaHora';
 
 export type TipoMovimiento = 'ENTRADA' | 'SALIDA';
 
@@ -98,7 +99,7 @@ export const asistenciaService = {
     const url = URL.createObjectURL(resp.data as Blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `asistencias-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `asistencias-${fechaHoyLocal()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   },

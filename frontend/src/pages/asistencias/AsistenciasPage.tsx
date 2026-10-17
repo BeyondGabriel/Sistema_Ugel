@@ -11,6 +11,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
 import type { Usuario, Jefatura } from '../../types';
+import { extraerFechaLocal, fechaHaceDiasLocal, fechaHoyLocal } from '../../utils/fechaHora';
 
 // ─── helpers ────────────────────────────────────────────
 function formatFecha(ts: string): string {
@@ -28,15 +29,6 @@ function formatHora(ts: string): string {
     hour12: false,
   });
 }
-function isoHoy() {
-  return new Date().toISOString().slice(0, 10);
-}
-function hace30Dias() {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
-}
-
 interface FilaDia {
   usuarioId: number;
   nombres: string;
@@ -54,7 +46,8 @@ function agruparPorDia(movimientos: MovimientoConJefatura[]): FilaDia[] {
 
   for (const m of movimientos) {
     if (!m.usuario) continue;
-    const diaKey = m.timestamp.slice(0, 10);
+    // El día se calcula en la zona horaria local del navegador, no en UTC
+    const diaKey = extraerFechaLocal(m.timestamp);
     const clave = `${m.usuarioId}-${diaKey}`;
     const jefatura = m.usuario.jefatura?.nombre ?? '—';
 
@@ -111,8 +104,8 @@ export function AsistenciasPage() {
   const [exportando, setExportando] = useState(false);
 
   // Filtros
-  const [fechaInicio, setFechaInicio] = useState(hace30Dias());
-  const [fechaFin, setFechaFin] = useState(isoHoy());
+  const [fechaInicio, setFechaInicio] = useState(fechaHaceDiasLocal(30));
+  const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
   const [usuarioFiltro, setUsuarioFiltro] = useState<number | ''>('');
   const [jefaturaFiltro, setJefaturaFiltro] = useState<number | ''>('');
 
@@ -122,7 +115,7 @@ export function AsistenciasPage() {
 
   useEffect(() => {
     Promise.all([
-      adminService.listarUsuarios({ activo: 'true' }), // Corregido: string 'true'
+      adminService.listarUsuarios({ activo: true }),
       adminService.listarJefaturas(),
     ]).then(([u, j]) => {
       setUsuarios(u);

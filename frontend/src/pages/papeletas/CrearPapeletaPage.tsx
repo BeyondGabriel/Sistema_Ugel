@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, DocumentPlusIcon } from '@heroicons/react/24/outline';
 import { papeletaService, type DatosCrearPapeleta } from '../../services/papeleta.service';
 import { useToast } from '../../hooks/useToast';
+import { extraerFechaLocal, extraerHoraLocal } from '../../utils/fechaHora';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
@@ -53,14 +54,14 @@ export function CrearPapeletaPage() {
         setMotivoOtros(papeleta.motivoOtros ?? '');
 
         if (papeleta.tipoTiempo === 'DIAS') {
-          // fechaInicio y fechaFin vienen como ISO; las convertimos a YYYY-MM-DD local
-          setFechaInicio(papeleta.fechaInicio.slice(0, 10));
-          setFechaFin(papeleta.fechaFin.slice(0, 10));
+          // fechaInicio y fechaFin vienen como ISO UTC; se convierten a YYYY-MM-DD local
+          setFechaInicio(extraerFechaLocal(papeleta.fechaInicio));
+          setFechaFin(extraerFechaLocal(papeleta.fechaFin));
         } else {
           // Para horas, suponemos que fechaInicio es la fecha del permiso
-          setFechaHoras(papeleta.fechaInicio.slice(0, 10));
-          setHoraSalida(papeleta.horaSalida?.slice(11, 16) ?? '');
-          setHoraRetorno(papeleta.horaRetorno?.slice(11, 16) ?? '');
+          setFechaHoras(extraerFechaLocal(papeleta.fechaInicio));
+          setHoraSalida(papeleta.horaSalida ? extraerHoraLocal(papeleta.horaSalida) : '');
+          setHoraRetorno(papeleta.horaRetorno ? extraerHoraLocal(papeleta.horaRetorno) : '');
         }
       } catch {
         mostrar('No se pudo cargar la papeleta', 'error');

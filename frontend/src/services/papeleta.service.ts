@@ -4,6 +4,7 @@
 
 import { api } from './api';
 import type { Papeleta, EstadoPapeleta } from '../types';
+import { fechaHoyLocal } from '../utils/fechaHora';
 
 export interface DatosCrearPapeleta {
   tipoTiempo: 'DIAS' | 'HORAS';
@@ -123,7 +124,7 @@ export const papeletaService = {
     const url = URL.createObjectURL(resp.data as Blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `papeletas-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `papeletas-${fechaHoyLocal()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   },

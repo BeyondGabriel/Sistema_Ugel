@@ -1,4 +1,5 @@
 import { api } from './api';
+import { fechaHoyLocal } from '../utils/fechaHora';
 
 export const visitaService = {
   async registrarVisita(data: {
@@ -46,7 +47,7 @@ async exportarVisitas(filtros?: {
   const url = URL.createObjectURL(response.data as Blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `visitas-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `visitas-${fechaHoyLocal()}.xlsx`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -18,12 +18,9 @@ import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { Usuario } from '../../types';
+import { fechaHoyLocal, valorLocalParaInput } from '../../utils/fechaHora';
 
 // ─── helpers ────────────────────────────────────────────
-function isoHoy(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function ahora(): string {
   return new Date().toISOString();
 }
@@ -105,7 +102,7 @@ export function RegistroAsistenciaPage() {
     async function cargar() {
       try {
         const [usuarios, presencias] = await Promise.all([
-          adminService.listarUsuarios({ activo: 'true' }),
+          adminService.listarUsuarios({ activo: true }),
           asistenciaService.obtenerPresencia(),
         ]);
 
@@ -130,7 +127,7 @@ export function RegistroAsistenciaPage() {
   const cargarMovsDelDia = useCallback(async (usuarioId: number) => {
     setCargandoMovs((prev) => ({ ...prev, [usuarioId]: true }));
     try {
-      const hoy = isoHoy();
+      const hoy = fechaHoyLocal();
       const movs = await asistenciaService.listarMovimientos({
         usuarioId,
         fechaInicio: hoy,
@@ -171,7 +168,7 @@ export function RegistroAsistenciaPage() {
         return;
       }
 
-      const ts = horaInput ? combinarFechaHora(isoHoy(), horaInput) : ahora();
+      const ts = horaInput ? combinarFechaHora(fechaHoyLocal(), horaInput) : ahora();
 
       await asistenciaService.registrarMovimiento({ usuarioId: usuario.id, tipo, timestamp: ts });
 
@@ -199,9 +196,8 @@ export function RegistroAsistenciaPage() {
   // ─── editar movimiento ──────────────────────────────────
   function abrirEditar(mov: MovimientoConJefatura) {
     setModalEditar({ isOpen: true, mov });
-    const local = new Date(mov.timestamp);
-    local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
-    setNuevoTimestamp(local.toISOString().slice(0, 16));
+    // El input datetime-local espera la hora local, no UTC
+    setNuevoTimestamp(valorLocalParaInput(mov.timestamp));
   }
 
   async function guardarEdicion() {

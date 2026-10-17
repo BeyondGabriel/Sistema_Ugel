@@ -37,11 +37,10 @@ export function RegistroVisitaPage() {
 
   useEffect(() => {
     Promise.all([
-      adminService.listarUsuarios({ activo: 'true' }),
+      adminService.listarUsuarios({ activo: true }),
       asistenciaService.obtenerPresencia(),
     ]).then(([u, p]) => {
-      // listarUsuarios devuelve un array (si no, extraer u.usuarios)
-      setUsuarios(Array.isArray(u) ? u : u?.usuarios ?? []);
+      setUsuarios(u);
       setPresencia(p);
     });
   }, []);

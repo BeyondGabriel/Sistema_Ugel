@@ -4,6 +4,7 @@ import { asistenciaService, type MovimientoConJefatura } from '../../services/as
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
+import { extraerFechaLocal, fechaHaceDiasLocal, fechaHoyLocal } from '../../utils/fechaHora';
 
 function formatFecha(ts: string): string {
   // Sumar T00:00:00 evita desplazamiento de zona horaria con fechas YYYY-MM-DD
@@ -20,12 +21,6 @@ function formatHora(ts: string): string {
     hour12: false,
   });
 }
-function isoHoy() { return new Date().toISOString().slice(0, 10); }
-function hace30Dias() {
-  const d = new Date(); d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
-}
-
 interface FilaDia {
   diaKey: string;
   horaEntrada: string | null;
@@ -36,7 +31,8 @@ interface FilaDia {
 function agruparPorDia(movimientos: MovimientoConJefatura[]): FilaDia[] {
   const mapa = new Map<string, FilaDia>();
   for (const m of movimientos) {
-    const diaKey = m.timestamp.slice(0, 10);
+    // El día se calcula en la zona horaria local del navegador, no en UTC
+    const diaKey = extraerFechaLocal(m.timestamp);
     if (!mapa.has(diaKey)) {
       mapa.set(diaKey, { diaKey, horaEntrada: null, horaSalida: null, estado: 'Falta' });
     }
@@ -60,8 +56,8 @@ export function MisAsistenciasPage() {
   const [filas, setFilas] = useState<FilaDia[]>([]);
   const [cargando, setCargando] = useState(false);
   const [exportando, setExportando] = useState(false);
-  const [fechaInicio, setFechaInicio] = useState(hace30Dias());
-  const [fechaFin, setFechaFin] = useState(isoHoy());
+  const [fechaInicio, setFechaInicio] = useState(fechaHaceDiasLocal(30));
+  const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
 
   const cargar = useCallback(async () => {
     if (!user) return;

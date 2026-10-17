@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
 import type { Visita, Usuario } from '../../types';
+import { fechaHaceDiasLocal, fechaHoyLocal } from '../../utils/fechaHora';
 
 function formatHora(ts: string): string {
   return new Date(ts).toLocaleString('es-PE', {
@@ -20,9 +21,6 @@ function formatHora(ts: string): string {
     hour12: false,
   });
 }
-
-function isoHoy() { return new Date().toISOString().slice(0, 10); }
-function hace7Dias() { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); }
 
 const INPUT_CLS = 'rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
@@ -39,13 +37,13 @@ export function VisitasPage() {
   const [exportando, setExportando] = useState(false);
   const [accionId, setAccionId] = useState<number | null>(null);
 
-  const [fechaInicio, setFechaInicio] = useState(hace7Dias());
-  const [fechaFin, setFechaFin] = useState(isoHoy());
+  const [fechaInicio, setFechaInicio] = useState(fechaHaceDiasLocal(7));
+  const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
   const [trabajadorFiltro, setTrabajadorFiltro] = useState<number | ''>('');
 
   useEffect(() => {
     if (puedeVerTodos) {
-      adminService.listarUsuarios({ activo: 'true' }).then((data: Usuario[]) => setUsuarios(data));
+      adminService.listarUsuarios({ activo: true }).then((data: Usuario[]) => setUsuarios(data));
     }
   }, [puedeVerTodos]);
 
