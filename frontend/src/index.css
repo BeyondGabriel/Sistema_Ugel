@@ -7,3 +7,99 @@ body {
   background-color: #111827;
   color: #f3f4f6;
 }
+
+/*
+ * ===========================================================
+ * SIGPER Design System — clases semánticas (tema claro)
+ * ===========================================================
+ * Solo se aplican donde se usan explícitamente: el tema oscuro
+ * existente (body + clases gray-*) no se ve afectado.
+ * Regla de oro: nunca `text-white` sobre `bg-brand-yellow`.
+ */
+@layer components {
+  /* Cards */
+  .card {
+    @apply rounded-ds-lg bg-surface-card shadow-card border border-line-light;
+  }
+  .card-hover {
+    @apply hover:shadow-hover transition-shadow;
+  }
+  .kpi-card {
+    @apply card p-5;
+  }
+
+  /* Botones */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-ds-lg font-medium transition-colors;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-blue text-content-inverse hover:bg-brand-blue-hover;
+  }
+  .btn-secondary {
+    @apply btn bg-line-light text-content-primary hover:bg-line-strong;
+  }
+  .btn-danger {
+    @apply btn bg-state-error-fg text-content-inverse hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-content-secondary hover:bg-line-light hover:text-content-primary;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  .btn-md {
+    @apply px-4 py-2 text-sm;
+  }
+  .btn-lg {
+    @apply px-5 py-2.5 text-base;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full rounded-ds-lg border border-line-light bg-surface-card px-4 py-2;
+    @apply text-content-primary placeholder:text-content-tertiary;
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent;
+  }
+  .input-field-error {
+    @apply border-state-error-fg;
+  }
+
+  /* Badges de estado */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-success {
+    @apply badge bg-state-success-bg text-state-success-fg;
+  }
+  .badge-warning {
+    @apply badge bg-state-warning-bg text-state-warning-fg;
+  }
+  .badge-error {
+    @apply badge bg-state-error-bg text-state-error-fg;
+  }
+  .badge-info {
+    @apply badge bg-state-info-bg text-state-info-fg;
+  }
+
+  /* Tipografía */
+  .heading-1 {
+    @apply text-2xl font-bold text-content-primary;
+  }
+  .heading-2 {
+    @apply text-xl font-semibold text-content-primary;
+  }
+  .heading-3 {
+    @apply text-base font-semibold text-content-primary;
+  }
+  .body-text {
+    @apply text-sm text-content-primary;
+  }
+  .body-muted {
+    @apply text-sm text-content-secondary;
+  }
+  .caption {
+    @apply text-xs text-content-tertiary;
+  }
+}

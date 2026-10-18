@@ -21,6 +21,7 @@ import { RegistroVisitaPage } from './pages/visitas/RegistroVisitaPage';
 import { NotificacionesPage } from './pages/notificaciones/NotificacionesPage';
 import { SocketProvider } from './contexts/SocketContext';
 import { NotFoundPage } from './pages/dashboard/NotFoundPage';
+import { DesignSystemPage } from './pages/demo/DesignSystemPage';
 
 // Páginas de módulos (stubs — se implementarán en fases posteriores)
 function ProximamentePage({ titulo }: { titulo: string }) {
@@ -42,6 +43,7 @@ export default function App() {
             {/* ── Rutas públicas ────────────────────────── */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/cambiar-password" element={<CambiarPasswordPage />} />
+            <Route path="/design-system" element={<DesignSystemPage />} />
 
             {/* ── Rutas protegidas con sidebar ──────────── */}
             <Route element={<ProtectedRoute />}>

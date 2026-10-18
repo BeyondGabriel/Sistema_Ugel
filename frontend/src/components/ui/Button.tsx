@@ -2,6 +2,13 @@ import { type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 type Variante = 'primary' | 'secondary' | 'danger' | 'ghost';
 type Tamano = 'sm' | 'md' | 'lg';
+/**
+ * Tema visual del botón.
+ * - `dark`  → aspecto original del producto (DEFAULT). Sus clases no deben cambiar:
+ *             las páginas aún no rediseñadas dependen de él.
+ * - `light` → Design System institucional (navy + azul + blanco).
+ */
+type Tema = 'dark' | 'light';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** API original del componente (en español). */
@@ -12,6 +19,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tamano?: Tamano;
   /** Alias en inglés: las páginas lo usan como `size`. Se normaliza a `tamano`. */
   size?: Tamano;
+  /** Tema visual. `dark` (por defecto) = comportamiento actual, sin cambios visuales. */
+  theme?: Tema;
   cargando?: boolean;
   icono?: ReactNode;
   iconoDerecho?: ReactNode;
@@ -19,15 +28,41 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
 }
 
-const clasesPorVariante: Record<Variante, string> = {
-  primary:
-    'bg-emerald-600 hover:bg-emerald-500 text-white border-transparent focus-visible:ring-emerald-500',
-  secondary:
-    'bg-gray-700 hover:bg-gray-600 text-gray-100 border-transparent focus-visible:ring-gray-500',
-  danger:
-    'bg-red-700 hover:bg-red-600 text-white border-transparent focus-visible:ring-red-500',
-  ghost:
-    'bg-transparent hover:bg-gray-700 text-gray-300 hover:text-gray-100 border-gray-600 focus-visible:ring-gray-500',
+/** Clases base (layout + foco + disabled) por tema. */
+const clasesBasePorTema: Record<Tema, string> = {
+  dark: [
+    'inline-flex items-center justify-center gap-2 rounded-lg border font-medium',
+    'transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900',
+    'disabled:opacity-50 disabled:cursor-not-allowed',
+  ].join(' '),
+  light: [
+    'inline-flex items-center justify-center gap-2 rounded-ds-lg border font-medium',
+    'transition-colors duration-150 focus:outline-none focus-visible:ring-2',
+    'disabled:opacity-50 disabled:cursor-not-allowed',
+  ].join(' '),
+};
+
+const clasesPorVariante: Record<Tema, Record<Variante, string>> = {
+  dark: {
+    primary:
+      'bg-emerald-600 hover:bg-emerald-500 text-white border-transparent focus-visible:ring-emerald-500',
+    secondary:
+      'bg-gray-700 hover:bg-gray-600 text-gray-100 border-transparent focus-visible:ring-gray-500',
+    danger:
+      'bg-red-700 hover:bg-red-600 text-white border-transparent focus-visible:ring-red-500',
+    ghost:
+      'bg-transparent hover:bg-gray-700 text-gray-300 hover:text-gray-100 border-gray-600 focus-visible:ring-gray-500',
+  },
+  light: {
+    primary:
+      'bg-brand-blue hover:bg-brand-blue-hover text-content-inverse border-transparent focus-visible:ring-brand-blue',
+    secondary:
+      'bg-line-light hover:bg-line-strong text-content-primary border-transparent focus-visible:ring-brand-blue',
+    danger:
+      'bg-state-error-fg text-content-inverse hover:opacity-90 border-transparent focus-visible:ring-state-error-fg',
+    ghost:
+      'bg-transparent text-content-secondary hover:bg-line-light hover:text-content-primary border-transparent focus-visible:ring-brand-blue',
+  },
 };
 
 const clasesPorTamano: Record<Tamano, string> = {
@@ -41,6 +76,7 @@ export function Button({
   variant,
   tamano,
   size,
+  theme = 'dark',
   cargando = false,
   icono,
   iconoDerecho,
@@ -62,10 +98,8 @@ export function Button({
       {...props}
       disabled={disabled || cargando}
       className={[
-        'inline-flex items-center justify-center gap-2 rounded-lg border font-medium',
-        'transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        clasesPorVariante[varianteFinal],
+        clasesBasePorTema[theme],
+        clasesPorVariante[theme][varianteFinal],
         clasesPorTamano[tamanoFinal],
         fullWidth ? 'w-full' : '',
         className,
