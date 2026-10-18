@@ -75,11 +75,11 @@ export function CampanitaNotificaciones() {
     <div ref={refContenedor} className="relative">
       <button
         onClick={toggleAbrir}
-        className="relative rounded-lg p-2 text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-colors"
+        className="relative rounded-lg p-2 text-content-inverse/80 transition-colors hover:bg-brand-navyLight hover:text-content-inverse"
         aria-label="Notificaciones"
       >
         {noLeidas > 0
-          ? <BellAlertIcon className="h-5 w-5 text-emerald-400" />
+          ? <BellAlertIcon className="h-5 w-5 text-brand-yellow" />
           : <BellIcon className="h-5 w-5" />
         }
         {noLeidas > 0 && (
