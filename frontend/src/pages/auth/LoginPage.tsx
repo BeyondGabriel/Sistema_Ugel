@@ -45,52 +45,57 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4">
       <div className="w-full max-w-sm">
         {/* Marca */}
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <div className="rounded-2xl bg-emerald-600/20 p-3">
-            <ShieldCheckIcon className="h-9 w-9 text-emerald-400" />
+          <div className="rounded-2xl bg-brand-blue/10 p-3">
+            <ShieldCheckIcon className="h-9 w-9 text-brand-blue" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-100">SIGPER</h1>
-          <p className="text-sm text-gray-500">Sistema de Gestión de Personal · UGEL Talara</p>
+          <h1 className="text-2xl font-bold text-content-primary">SIGPER</h1>
+          <p className="text-sm text-content-secondary">Sistema de Gestión de Personal · UGEL Talara</p>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Correo institucional"
-            type="email"
-            placeholder="usuario@ugeltalara.gob.pe"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            icono={<EnvelopeIcon />}
-            autoComplete="email"
-            required
-          />
-          <Input
-            label="Contraseña"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            icono={<LockClosedIcon />}
-            autoComplete="current-password"
-            required
-          />
-          <Button
-            type="submit"
-            variante="primary"
-            tamano="md"
-            cargando={isLoading}
-            fullWidth
-            className="mt-2"
-          >
-            Ingresar
-          </Button>
-        </form>
+        {/* Formulario en card */}
+        <div className="rounded-ds-lg border border-line-light bg-surface-card p-6 shadow-card">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Correo institucional"
+              type="email"
+              placeholder="usuario@ugeltalara.gob.pe"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              icono={<EnvelopeIcon />}
+              theme="light"
+              autoComplete="email"
+              required
+            />
+            <Input
+              label="Contraseña"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              icono={<LockClosedIcon />}
+              theme="light"
+              autoComplete="current-password"
+              required
+            />
+            <Button
+              type="submit"
+              variante="primary"
+              theme="light"
+              tamano="md"
+              cargando={isLoading}
+              fullWidth
+              className="mt-2"
+            >
+              Ingresar
+            </Button>
+          </form>
+        </div>
 
-        <p className="mt-6 text-center text-xs text-gray-600">
+        <p className="mt-6 text-center text-xs text-content-tertiary">
           Acceso restringido al personal autorizado
         </p>
       </div>

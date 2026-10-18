@@ -50,66 +50,78 @@ export function CambiarPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-surface-bg px-4">
       <div className="w-full max-w-sm">
-        {/* Encabezado */}
+        {/* Marca */}
         <div className="mb-8 flex flex-col items-center gap-2 text-center">
-          <div className="rounded-2xl bg-amber-600/20 p-3">
-            <KeyIcon className="h-9 w-9 text-amber-400" />
+          <div className="rounded-2xl bg-brand-yellow/15 p-3">
+            <KeyIcon className="h-9 w-9 text-brand-yellow-dark" />
           </div>
-          <h1 className="text-xl font-bold text-gray-100">Cambio de contraseña requerido</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-bold text-content-primary">Cambio de contraseña requerido</h1>
+          <p className="text-sm text-content-secondary">
             Tu cuenta requiere que establezcas una contraseña personal antes de continuar.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Contraseña actual"
-            type="password"
-            placeholder="••••••••"
-            value={actual}
-            onChange={(e) => setActual(e.target.value)}
-            icono={<LockClosedIcon />}
-            required
-          />
-          <Input
-            label="Nueva contraseña"
-            type="password"
-            placeholder="Mínimo 8 car., un número y un símbolo"
-            value={nueva}
-            onChange={(e) => {
-              setNueva(e.target.value);
-              setErrores((err) => ({ ...err, nueva: '' }));
-            }}
-            icono={<LockClosedIcon />}
-            error={errores.nueva}
-            required
-          />
-          <Input
-            label="Confirmar nueva contraseña"
-            type="password"
-            placeholder="••••••••"
-            value={confirmar}
-            onChange={(e) => {
-              setConfirmar(e.target.value);
-              setErrores((err) => ({ ...err, confirmar: '' }));
-            }}
-            icono={<LockClosedIcon />}
-            error={errores.confirmar}
-            required
-          />
+        {/* Formulario en card */}
+        <div className="rounded-ds-lg border border-line-light bg-surface-card p-6 shadow-card">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Contraseña actual"
+              type="password"
+              placeholder="••••••••"
+              value={actual}
+              onChange={(e) => setActual(e.target.value)}
+              icono={<LockClosedIcon />}
+              theme="light"
+              required
+            />
+            <Input
+              label="Nueva contraseña"
+              type="password"
+              placeholder="Mínimo 8 car., un número y un símbolo"
+              value={nueva}
+              onChange={(e) => {
+                setNueva(e.target.value);
+                setErrores((err) => ({ ...err, nueva: '' }));
+              }}
+              icono={<LockClosedIcon />}
+              theme="light"
+              error={errores.nueva}
+              required
+            />
+            <Input
+              label="Confirmar nueva contraseña"
+              type="password"
+              placeholder="••••••••"
+              value={confirmar}
+              onChange={(e) => {
+                setConfirmar(e.target.value);
+                setErrores((err) => ({ ...err, confirmar: '' }));
+              }}
+              icono={<LockClosedIcon />}
+              theme="light"
+              error={errores.confirmar}
+              required
+            />
 
-          <ul className="rounded-lg bg-gray-800 px-4 py-3 text-xs text-gray-400 space-y-1">
-            <li className={nueva.length >= 8 ? 'text-emerald-400' : ''}>✓ Mínimo 8 caracteres</li>
-            <li className={/[0-9]/.test(nueva) ? 'text-emerald-400' : ''}>✓ Al menos un número</li>
-            <li className={/[^A-Za-z0-9]/.test(nueva) ? 'text-emerald-400' : ''}>✓ Al menos un símbolo (!@#$…)</li>
-          </ul>
+            <ul className="rounded-ds-md border border-line-light bg-surface-bg px-4 py-3 text-xs text-content-secondary space-y-1">
+              <li className={nueva.length >= 8 ? 'text-state-success-fg' : 'text-content-tertiary'}>
+                ✓ Mínimo 8 caracteres
+              </li>
+              <li className={/[0-9]/.test(nueva) ? 'text-state-success-fg' : 'text-content-tertiary'}>
+                ✓ Al menos un número
+              </li>
+              <li className={/[^A-Za-z0-9]/.test(nueva) ? 'text-state-success-fg' : 'text-content-tertiary'}>
+                ✓ Al menos un símbolo (!@#$…)
+              </li>
+            </ul>
 
-          <Button type="submit" variante="primary" cargando={isLoading} fullWidth>
-            Guardar contraseña
-          </Button>
-        </form>
+            <Button type="submit" variante="primary" theme="light" cargando={isLoading} fullWidth>
+              Guardar contraseña
+            </Button>
+          </form>
+        </div>
       </div>
     </div>
   );
