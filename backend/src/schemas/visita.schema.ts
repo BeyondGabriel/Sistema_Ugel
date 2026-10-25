@@ -50,12 +50,6 @@ export const registrarVisitaSchema = z
     visitanteDni: dniSchema,
 
     trabajadorVisitadoId: idSchema,
-
-    gafeteEntregado: z
-      .boolean({
-        error: 'gafeteEntregado debe ser verdadero o falso',
-      })
-      .optional(),
   })
   .strict();
 

@@ -9,6 +9,22 @@ import prisma from '../utils/prisma';
 import { UsuarioAutenticado } from '../middlewares/authJWT';
 
 /**
+ * Devuelve los ids de solicitantes cuyas papeletas tienen a `usuarioId` como
+ * aprobador asignado. Cubre el caso del encargado de una delegación: las
+ * papeletas de los subordinados del titular se le asignan a él, aunque no
+ * figuren como sus subordinados directos en la jerarquía.
+ */
+async function obtenerIdsSolicitantesDondeAprobo(usuarioId: number): Promise<number[]> {
+  const papeletas = await prisma.papeleta.findMany({
+    where: { aprobadorId: usuarioId },
+    select: { solicitanteId: true },
+    distinct: ['solicitanteId'],
+  });
+
+  return papeletas.map((p) => p.solicitanteId);
+}
+
+/**
  * Devuelve los ids de solicitante que el usuario autenticado puede ver,
  * o null si no tiene restricción (ve a todos).
  *
@@ -16,8 +32,11 @@ import { UsuarioAutenticado } from '../middlewares/authJWT';
  * - ADMIN, RRHH, DIRECTORA, VIGILANTE: null → ven todas las papeletas.
  *   DIRECTORA y VIGILANTE necesitan alcance global por su función (firma
  *   institucional y control de puerta).
- * - JEFE: ve las propias + las de sus subordinados directos (jefeId === su id).
- * - ESPECIALISTA: solo las propias.
+ * - JEFE: ve las propias + las de sus subordinados directos (jefeId === su id)
+ *   + las de los solicitantes que lo tienen como aprobador asignado (encargado
+ *   de una delegación).
+ * - ESPECIALISTA: solo las propias + las de los solicitantes que lo tienen
+ *   como aprobador asignado (encargado de una delegación).
  */
 export async function obtenerIdsVisibles(
   usuarioToken: UsuarioAutenticado,
@@ -32,11 +51,18 @@ export async function obtenerIdsVisibles(
   }
 
   if (usuarioToken.rol === Rol.JEFE) {
-    return obtenerIdsEquipo(usuarioToken);
+    const subordinados = await prisma.usuario.findMany({
+      where: { jefeId: usuarioToken.id },
+      select: { id: true },
+    });
+    const comoAprobador = await obtenerIdsSolicitantesDondeAprobo(usuarioToken.id);
+    return [...new Set([usuarioToken.id, ...subordinados.map((u) => u.id), ...comoAprobador])];
   }
 
-  // ESPECIALISTA: solo su propio usuario
-  return [usuarioToken.id];
+  // ESPECIALISTA: su propio usuario + los solicitantes de las papeletas que
+  // tiene asignadas como aprobador (encargado de una delegación).
+  const comoAprobador = await obtenerIdsSolicitantesDondeAprobo(usuarioToken.id);
+  return [...new Set([usuarioToken.id, ...comoAprobador])];
 }
 
 /**

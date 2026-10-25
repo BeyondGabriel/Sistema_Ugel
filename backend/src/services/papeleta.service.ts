@@ -243,11 +243,31 @@ export async function resolverAprobadorFinal(
  * jerarquía y las delegaciones actuales. Incluye el caso de auto-aprobación
  * (la Directora actuando sobre su propia papeleta) y el respaldo de RRHH,
  * que puede ser ejercido por cualquier usuario de RRHH activo.
+ *
+ * `papeletaContext` habilita la excepción del desbloqueo administrativo: si el
+ * Administrador reasignó el aprobador (`reasignadoPorId` no nulo), el usuario
+ * asignado queda habilitado aunque no sea el aprobador natural de la
+ * jerarquía, siempre que siga activo.
  */
 export async function esAprobadorVigente(
   solicitanteId: number,
   usuarioId: number,
+  papeletaContext?: { aprobadorId: number | null; reasignadoPorId: number | null },
 ): Promise<boolean> {
+  // Desbloqueo administrativo: el aprobador asignado manualmente por el ADMIN
+  // queda habilitado aunque no coincida con la jerarquía natural.
+  if (
+    papeletaContext &&
+    papeletaContext.reasignadoPorId !== null &&
+    papeletaContext.aprobadorId === usuarioId
+  ) {
+    const u = await prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { activo: true },
+    });
+    if (u?.activo) return true;
+  }
+
   const solicitante = await prisma.usuario.findUnique({
     where: { id: solicitanteId },
   });

@@ -7,7 +7,6 @@ import { Router } from 'express';
 import {
   registrarVisita,
   registrarSalida,
-  marcarGafete,
   listarVisitas,
   obtenerVisita,
 } from '../controllers/visita.controller';
@@ -65,14 +64,6 @@ router.put(
   checkRole('VIGILANTE', 'ADMIN'),
   validate(visitaIdParamsSchema, 'params'),
   registrarSalida,
-);
-
-router.put(
-  '/:id/gafete',
-  authJWT,
-  checkRole('VIGILANTE', 'ADMIN'),
-  validate(visitaIdParamsSchema, 'params'),
-  marcarGafete,
 );
 
 export default router;

@@ -270,7 +270,6 @@ export async function exportarVisitas(req: Request, res: Response): Promise<void
       { header: 'Jefatura', key: 'jefatura', width: 22 },
       { header: 'Hora entrada', key: 'horaEntrada', width: 20 },
       { header: 'Hora salida', key: 'horaSalida', width: 20 },
-      { header: 'Gafete entregado', key: 'gafete', width: 18 },
     ];
 
     estilizarCabecera(hoja.getRow(1), hoja.columns.length);
@@ -283,7 +282,6 @@ export async function exportarVisitas(req: Request, res: Response): Promise<void
         jefatura: visita.trabajadorVisitado.jefatura?.nombre ?? '—',
         horaEntrada: formatearHora(visita.horaEntrada),
         horaSalida: formatearHora(visita.horaSalida),
-        gafete: visita.gafeteEntregado ? 'Sí' : 'No',
       });
     }
 

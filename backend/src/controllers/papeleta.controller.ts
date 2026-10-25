@@ -347,7 +347,10 @@ export async function iniciarRevision(
     const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
     const sigueSiendoAprobador =
       esAprobadorAsignado &&
-      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id, {
+        aprobadorId: papeleta.aprobadorId,
+        reasignadoPorId: papeleta.reasignadoPorId,
+      }));
 
     if (!sigueSiendoAprobador) {
       res.status(403).json({
@@ -430,7 +433,10 @@ export async function aprobarPapeleta(
     const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
     const sigueSiendoAprobador =
       esAprobadorAsignado &&
-      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id, {
+        aprobadorId: papeleta.aprobadorId,
+        reasignadoPorId: papeleta.reasignadoPorId,
+      }));
 
     if (!sigueSiendoAprobador) {
       res.status(403).json({
@@ -523,7 +529,10 @@ export async function rechazarPapeleta(
     const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
     const sigueSiendoAprobador =
       esAprobadorAsignado &&
-      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id, {
+        aprobadorId: papeleta.aprobadorId,
+        reasignadoPorId: papeleta.reasignadoPorId,
+      }));
 
     if (!sigueSiendoAprobador) {
       res.status(403).json({
@@ -611,7 +620,10 @@ export async function observarPapeleta(
     const esAprobadorAsignado = papeleta.aprobadorId === usuarioToken.id;
     const sigueSiendoAprobador =
       esAprobadorAsignado &&
-      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id, {
+        aprobadorId: papeleta.aprobadorId,
+        reasignadoPorId: papeleta.reasignadoPorId,
+      }));
 
     if (!sigueSiendoAprobador) {
       res.status(403).json({
@@ -885,6 +897,7 @@ export async function desbloquearPapeleta(
       data: {
         aprobadorId,
         requiereAprobadorEspecial: false,
+        reasignadoPorId: req.usuario?.id ?? null,
       },
     });
 

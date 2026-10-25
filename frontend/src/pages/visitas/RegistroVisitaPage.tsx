@@ -31,7 +31,6 @@ export function RegistroVisitaPage() {
 
   const [visitanteNombre, setVisitanteNombre] = useState('');
   const [visitanteDni, setVisitanteDni] = useState('');
-  const [gafete, setGafete] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
 
@@ -72,14 +71,12 @@ export function RegistroVisitaPage() {
         visitanteNombre: visitanteNombre.trim(),
         visitanteDni: visitanteDni.trim(),
         trabajadorVisitadoId: trabajadorId as number,
-        gafeteEntregado: gafete,
       });
       mostrar('Visita registrada exitosamente', 'success');
       setVisitanteNombre('');
       setVisitanteDni('');
       setTrabajadorId('');
       setBusquedaTrabajador('');
-      setGafete(false);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { mensaje?: string } } })?.response?.data?.mensaje
         ?? 'Error al registrar la visita';
@@ -171,20 +168,6 @@ export function RegistroVisitaPage() {
                 </p>
               </div>
             )}
-
-            {/* Gafete */}
-            <div className="flex items-center gap-3 pt-1">
-              <input
-                id="gafete"
-                type="checkbox"
-                checked={gafete}
-                onChange={(e) => setGafete(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500"
-              />
-              <label htmlFor="gafete" className="text-sm font-medium text-gray-300">
-                Gafete entregado al visitante
-              </label>
-            </div>
 
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="ghost" type="button" onClick={() => navigate('/visitas')}>Cancelar</Button>

@@ -132,7 +132,6 @@ export interface Visita {
   registradorId: number;
   horaEntrada: string;
   horaSalida?: string | null;
-  gafeteEntregado: boolean;
   trabajadorVisitado?: UsuarioBasico & { jefatura?: Jefatura | null };
   registrador?: UsuarioBasico;
 }

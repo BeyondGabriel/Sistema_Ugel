@@ -6,7 +6,6 @@ export const visitaService = {
     visitanteNombre: string;
     visitanteDni: string;
     trabajadorVisitadoId: number;
-    gafeteEntregado?: boolean;
   }) {
     const response = await api.post('/visitas', data);
     return response.data;
@@ -14,11 +13,6 @@ export const visitaService = {
 
   async registrarSalida(id: number) {
     const response = await api.put(`/visitas/${id}/salida`);
-    return response.data.visita;  // ← devuelve la visita directamente
-  },
-
-  async marcarGafete(id: number) {
-    const response = await api.put(`/visitas/${id}/gafete`);
     return response.data.visita;  // ← devuelve la visita directamente
   },
 

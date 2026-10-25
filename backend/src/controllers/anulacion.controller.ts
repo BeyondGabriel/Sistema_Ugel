@@ -59,7 +59,10 @@ export async function anularPapeleta(req: Request, res: Response): Promise<void>
     // actual. Un aprobador obsoleto (tras cambio de jefe/rol) queda excluido.
     const esAprobador =
       esAprobadorAsignado &&
-      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id));
+      (await esAprobadorVigente(papeleta.solicitanteId, usuarioToken.id, {
+        aprobadorId: papeleta.aprobadorId,
+        reasignadoPorId: papeleta.reasignadoPorId,
+      }));
 
     if (!esAdmin && !esAprobador) {
       res.status(403).json({ mensaje: 'Solo el aprobador vigente de la papeleta o un administrador pueden anularla' });

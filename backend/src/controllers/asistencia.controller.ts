@@ -28,7 +28,8 @@ type AlcanceConsulta = 'propios' | 'equipo';
  * (Bloque A):
  * - ESPECIALISTA: siempre solo el propio.
  * - JEFE: su equipo (él + subordinados) o solo el propio si alcance='propios'.
- * - DIRECTORA: su equipo (ella + jefes) o solo el propio si alcance='propios'.
+ * - DIRECTORA: sin restricción (null) por su alcance institucional; solo el
+ *   propio si alcance='propios'.
  * - ADMIN, RRHH, VIGILANTE: null → sin restricción.
  */
 async function resolverIdsAsistencia(
@@ -43,7 +44,15 @@ async function resolverIdsAsistencia(
     return [usuarioToken.id];
   }
 
-  if (usuarioToken.rol === Rol.JEFE || usuarioToken.rol === Rol.DIRECTORA) {
+  if (usuarioToken.rol === Rol.DIRECTORA) {
+    if (alcance === 'propios') {
+      return [usuarioToken.id];
+    }
+
+    return null;
+  }
+
+  if (usuarioToken.rol === Rol.JEFE) {
     if (alcance === 'propios') {
       return [usuarioToken.id];
     }
@@ -274,7 +283,8 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
  * GET /api/asistencias
  * Todos los roles autenticados, pero con alcance distinto:
  * - ESPECIALISTA: solo sus propios movimientos.
- * - JEFE / DIRECTORA: su equipo (o solo los propios con alcance='propios').
+ * - JEFE: su equipo (o solo los propios con alcance='propios').
+ * - DIRECTORA: sin restricción (o solo los propios con alcance='propios').
  * - VIGILANTE, RRHH, ADMIN: pueden consultar todos, con filtros opcionales.
  */
 export async function listarMovimientos(req: Request, res: Response): Promise<void> {
@@ -362,9 +372,8 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
  * (incluido "sin movimientos hoy").
  *
  * Visibilidad:
- * - ADMIN, RRHH y VIGILANTE ven a todos los usuarios activos.
+ * - ADMIN, RRHH, VIGILANTE y DIRECTORA ven a todos los usuarios activos.
  * - JEFE ve únicamente a sus subordinados (jefeId === su id) y a sí mismo.
- * - DIRECTORA ve a los jefes y a sí misma.
  * Tanto JEFE como DIRECTORA pueden limitar el resultado a sí mismos con
  * `alcance=propios`.
  */

@@ -96,6 +96,7 @@ model Usuario {
   papeletasCreadas    Papeleta[] @relation("PapeletasSolicitadas")
   papeletasAprobadas  Papeleta[] @relation("PapeletasAprobadas")
   papeletasAnuladas   Papeleta[] @relation("PapeletasAnuladasPorAdmin")
+  papeletasReasignadas Papeleta[] @relation("PapeletaReasignadaPor")
 
   // Relación con Movimiento (asistencias)
   movimientos         Movimiento[]
@@ -182,6 +183,12 @@ model Papeleta {
   // PENDIENTE sin aprobador y visible para el ADMIN, que debe intervenir.
   requiereAprobadorEspecial Boolean @default(false)
 
+  // Desbloqueo administrativo: usuario que reasignó el aprobador. Cuando no
+  // es null, el aprobador asignado queda habilitado aunque no sea el
+  // aprobador natural de la jerarquía (ver esAprobadorVigente).
+  reasignadoPorId Int?
+  reasignadoPor   Usuario? @relation("PapeletaReasignadaPor", fields: [reasignadoPorId], references: [id], onDelete: SetNull)
+
   firmaExternaSvg   String?        // path/URL al archivo SVG almacenado en Supabase
 
   fechaCreacion     DateTime       @default(now())
@@ -206,7 +213,6 @@ model Visita {
 
   horaEntrada          DateTime
   horaSalida           DateTime?
-  gafeteEntregado      Boolean   @default(false)
 
   @@index([trabajadorVisitadoId])
   @@index([registradorId])

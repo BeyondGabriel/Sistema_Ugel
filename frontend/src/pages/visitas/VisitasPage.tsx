@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PlusIcon, ArrowDownTrayIcon, FunnelIcon,
-  CheckCircleIcon, ClockIcon, ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 import { visitaService } from '../../services/visita.service';
 import { adminService } from '../../services/admin.service';
@@ -103,26 +102,6 @@ export function VisitasPage() {
     }
   }
 
-  async function toggleGafete(id: number) {
-    setAccionId(id);
-    try {
-      const actualizada = await visitaService.marcarGafete(id);
-      // Fusionar la visita actualizada con la existente para conservar relaciones
-      setVisitas((prev) =>
-        prev.map((v) =>
-          v.id === id
-            ? { ...v, ...actualizada, trabajadorVisitado: v.trabajadorVisitado }
-            : v
-        )
-      );
-      mostrar('Gafete actualizado', 'success');
-    } catch {
-      mostrar('Error al actualizar el gafete', 'error');
-    } finally {
-      setAccionId(null);
-    }
-  }
-
   async function exportar() {
     setExportando(true);
     mostrar('Preparando descarga…', 'info');
@@ -211,17 +190,16 @@ export function VisitasPage() {
               <th className="px-4 py-3 text-left">Jefatura</th>
               <th className="px-4 py-3 text-left">Entrada</th>
               <th className="px-4 py-3 text-left">Salida</th>
-              <th className="px-4 py-3 text-center">Gafete</th>
               {puedeAccionar && <th className="px-4 py-3 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700 bg-gray-900">
             {cargando ? (
-              <tr><td colSpan={puedeAccionar ? 8 : 7} className="py-10 text-center">
+              <tr><td colSpan={puedeAccionar ? 7 : 6} className="py-10 text-center">
                 <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
               </td></tr>
             ) : visitas.length === 0 ? (
-              <tr><td colSpan={puedeAccionar ? 8 : 7} className="py-10 text-center text-gray-500">Sin registros</td></tr>
+              <tr><td colSpan={puedeAccionar ? 7 : 6} className="py-10 text-center text-gray-500">Sin registros</td></tr>
             ) : (
               visitas.map((v) => (
                 <tr key={v.id} className="hover:bg-gray-800/60 transition-colors">
@@ -238,23 +216,12 @@ export function VisitasPage() {
                       : <span className="text-xs text-amber-400">Aún en sede</span>
                     }
                   </td>
-                  <td className="px-4 py-2.5 text-center">
-                    {v.gafeteEntregado
-                      ? <CheckCircleIcon className="h-4 w-4 text-emerald-400 mx-auto" />
-                      : <ClockIcon className="h-4 w-4 text-gray-500 mx-auto" />
-                    }
-                  </td>
                   {puedeAccionar && (
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
                         {!v.horaSalida && (
                           <Button variant="secondary" size="sm" disabled={accionId === v.id} onClick={() => registrarSalida(v.id)}>
                             Salida
-                          </Button>
-                        )}
-                        {!v.gafeteEntregado && (
-                          <Button variant="ghost" size="sm" disabled={accionId === v.id} onClick={() => toggleGafete(v.id)}>
-                            <ShieldCheckIcon className="h-4 w-4" /> Gafete
                           </Button>
                         )}
                       </div>

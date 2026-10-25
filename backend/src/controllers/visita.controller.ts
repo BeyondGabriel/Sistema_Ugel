@@ -27,7 +27,8 @@ type AlcanceConsulta = 'propios' | 'equipo';
  * autenticado (Bloque A):
  * - ESPECIALISTA: solo las que él recibió.
  * - JEFE: las de su equipo (él + subordinados) o solo las propias.
- * - DIRECTORA: las de ella + jefes, o solo las propias.
+ * - DIRECTORA: sin restricción (null) por su alcance institucional; solo las
+ *   propias si alcance='propios'.
  * - VIGILANTE, RRHH, ADMIN: null → todas.
  */
 async function resolverIdsVisitados(
@@ -42,7 +43,15 @@ async function resolverIdsVisitados(
     return [usuarioToken.id];
   }
 
-  if (usuarioToken.rol === Rol.JEFE || usuarioToken.rol === Rol.DIRECTORA) {
+  if (usuarioToken.rol === Rol.DIRECTORA) {
+    if (alcance === 'propios') {
+      return [usuarioToken.id];
+    }
+
+    return null;
+  }
+
+  if (usuarioToken.rol === Rol.JEFE) {
     if (alcance === 'propios') {
       return [usuarioToken.id];
     }
@@ -68,7 +77,7 @@ export async function registrarVisita(req: Request, res: Response): Promise<void
     }
 
     // Los datos ya llegan validados por registrarVisitaSchema.
-    const { visitanteNombre, visitanteDni, trabajadorVisitadoId, gafeteEntregado } =
+    const { visitanteNombre, visitanteDni, trabajadorVisitadoId } =
       req.body as z.infer<typeof registrarVisitaSchema>;
 
     const trabajador = await prisma.usuario.findUnique({ where: { id: trabajadorVisitadoId } });
@@ -90,7 +99,6 @@ export async function registrarVisita(req: Request, res: Response): Promise<void
         trabajadorVisitadoId,
         registradorId: usuarioToken.id,
         horaEntrada: new Date(),
-        gafeteEntregado: gafeteEntregado ?? false,
       },
     });
 
@@ -152,52 +160,11 @@ export async function registrarSalida(req: Request, res: Response): Promise<void
 }
 
 /**
- * PUT /api/visitas/:id/gafete
- * Roles: VIGILANTE, ADMIN. Idempotente: si ya estaba en true, lo deja igual.
- */
-export async function marcarGafete(req: Request, res: Response): Promise<void> {
-  try {
-    const { id } = req.params as unknown as z.infer<typeof visitaIdParamsSchema>;
-
-    const usuarioToken = req.usuario;
-    if (!usuarioToken) {
-      res.status(401).json({ mensaje: 'No autenticado' });
-      return;
-    }
-
-    const visita = await prisma.visita.findUnique({ where: { id } });
-    if (!visita) {
-      res.status(404).json({ mensaje: 'Visita no encontrada' });
-      return;
-    }
-
-    // B-02: mismo control a nivel de recurso que registrarSalida.
-    const esAdmin = usuarioToken.rol === Rol.ADMIN;
-    if (!esAdmin && visita.registradorId !== usuarioToken.id) {
-      res.status(403).json({
-        mensaje: 'Solo el vigilante que registró la visita o un administrador pueden marcar el gafete',
-      });
-      return;
-    }
-
-    const visitaActualizada = await prisma.visita.update({
-      where: { id },
-      data: { gafeteEntregado: true },
-    });
-
-    res.status(200).json({ visita: visitaActualizada });
-  } catch (error) {
-    console.error('Error en marcarGafete:', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
-  }
-}
-
-/**
  * GET /api/visitas
  * Visibilidad:
  * - ESPECIALISTA: solo las visitas que recibió.
- * - JEFE / DIRECTORA: las de su equipo (o solo las propias con
- *   alcance='propios').
+ * - JEFE: las de su equipo (o solo las propias con alcance='propios').
+ * - DIRECTORA: todas (o solo las propias con alcance='propios').
  * - VIGILANTE, RRHH, ADMIN: todas, con filtros opcionales.
  */
 export async function listarVisitas(req: Request, res: Response): Promise<void> {
