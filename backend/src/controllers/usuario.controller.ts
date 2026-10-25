@@ -91,7 +91,22 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
       apellidos,
       jefaturaId,
       jefeId,
+      tituloFormal,
+      noDisponible,
     } = req.body as z.infer<typeof crearUsuarioSchema>;
+
+    // Bloque A: el título formal y la marca de no disponibilidad (P1C) son
+    // atributos de aprobador; solo el ADMIN los configura.
+    if (
+      (tituloFormal !== undefined || noDisponible !== undefined) &&
+      req.usuario?.rol !== Rol.ADMIN
+    ) {
+      res.status(403).json({
+        mensaje:
+          'Solo un administrador puede configurar el título formal o la disponibilidad del aprobador',
+      });
+      return;
+    }
 
     // H-03 / H-05: el rol RRHH no puede emitir cuentas ADMIN (evita la
     // escalada de privilegios indirecta). Solo un ADMIN puede crear ADMIN.
@@ -162,6 +177,13 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
 
     const passwordHasheada = await bcrypt.hash(passwordFinal, 10);
 
+    // Bloque A: el título formal y la indisponibilidad solo aplican a los
+    // roles que aprueban papeletas (JEFE, DIRECTORA).
+    const esRolAprobador = rol === Rol.JEFE || rol === Rol.DIRECTORA;
+    const tituloFormalFinal =
+      esRolAprobador && tituloFormal ? tituloFormal : null;
+    const noDisponibleFinal = esRolAprobador ? noDisponible ?? false : false;
+
     const nuevoUsuario = await prisma.usuario.create({
       data: {
         email,
@@ -173,6 +195,8 @@ export async function crearUsuario(req: Request, res: Response): Promise<void> {
         cambioPassword: true,
         jefaturaId: jefaturaId ?? null,
         jefeId: jefeId ?? null,
+        tituloFormal: tituloFormalFinal,
+        noDisponible: noDisponibleFinal,
       },
     });
 
@@ -220,7 +244,21 @@ export async function editarUsuario(req: Request, res: Response): Promise<void> 
       jefaturaId,
       jefeId,
       activo,
+      tituloFormal,
+      noDisponible,
     } = req.body as z.infer<typeof editarUsuarioSchema>;
+
+    // Bloque A: solo el ADMIN configura el título formal y la disponibilidad.
+    if (
+      (tituloFormal !== undefined || noDisponible !== undefined) &&
+      req.usuario?.rol !== Rol.ADMIN
+    ) {
+      res.status(403).json({
+        mensaje:
+          'Solo un administrador puede configurar el título formal o la disponibilidad del aprobador',
+      });
+      return;
+    }
 
     if (email !== undefined && email !== usuarioActual.email) {
       const emailExistente = await prisma.usuario.findUnique({ where: { email } });
@@ -302,6 +340,24 @@ if (jefeId !== undefined) {
 }
 
 if (activo !== undefined) datosActualizacion.activo = activo;
+
+// Bloque A: título formal e indisponibilidad solo para roles aprobadores.
+const esRolAprobadorFinal = rolFinal === Rol.JEFE || rolFinal === Rol.DIRECTORA;
+
+if (tituloFormal !== undefined) {
+  datosActualizacion.tituloFormal =
+    esRolAprobadorFinal && tituloFormal ? tituloFormal : null;
+}
+
+if (noDisponible !== undefined) {
+  datosActualizacion.noDisponible = esRolAprobadorFinal ? noDisponible : false;
+}
+
+// Al cambiar a un rol que no aprueba, se limpian los atributos de aprobador.
+if (rol !== undefined && !esRolAprobadorFinal) {
+  datosActualizacion.tituloFormal = null;
+  datosActualizacion.noDisponible = false;
+}
 
     const usuarioActualizado = await prisma.usuario.update({
       where: { id },

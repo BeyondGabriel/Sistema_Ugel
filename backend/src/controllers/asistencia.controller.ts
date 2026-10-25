@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { TipoMovimiento, Rol, Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { verificarBloqueo } from '../services/bloqueos.service';
+import { obtenerIdsEquipo } from '../services/visibilidadPapeletas.service';
 import { obtenerRangoDelDia } from '../utils/fechas';
 import {
   registrarMovimientoSchema,
@@ -17,7 +18,42 @@ import {
 } from '../schemas/asistencia.schema';
 
 /** Roles que, en este módulo, solo pueden consultar sus propios movimientos. */
-const ROLES_SOLO_PROPIOS: Rol[] = [Rol.ESPECIALISTA, Rol.JEFE, Rol.DIRECTORA];
+const ROLES_SOLO_PROPIOS: Rol[] = [Rol.ESPECIALISTA];
+
+/** Alcance solicitado por el cliente para los roles con equipo a cargo. */
+type AlcanceConsulta = 'propios' | 'equipo';
+
+/**
+ * Resuelve los ids de usuario que puede consultar el usuario autenticado
+ * (Bloque A):
+ * - ESPECIALISTA: siempre solo el propio.
+ * - JEFE: su equipo (él + subordinados) o solo el propio si alcance='propios'.
+ * - DIRECTORA: su equipo (ella + jefes) o solo el propio si alcance='propios'.
+ * - ADMIN, RRHH, VIGILANTE: null → sin restricción.
+ */
+async function resolverIdsAsistencia(
+  usuarioToken: Express.Request['usuario'],
+  alcance: AlcanceConsulta | undefined,
+): Promise<number[] | null> {
+  if (!usuarioToken) {
+    return [];
+  }
+
+  if (ROLES_SOLO_PROPIOS.includes(usuarioToken.rol)) {
+    return [usuarioToken.id];
+  }
+
+  if (usuarioToken.rol === Rol.JEFE || usuarioToken.rol === Rol.DIRECTORA) {
+    if (alcance === 'propios') {
+      return [usuarioToken.id];
+    }
+
+    return obtenerIdsEquipo(usuarioToken);
+  }
+
+  return null;
+}
+
 
 /**
  * Convierte una fecha YYYY-MM-DD a un objeto Date local.
@@ -237,7 +273,8 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
 /**
  * GET /api/asistencias
  * Todos los roles autenticados, pero con alcance distinto:
- * - ESPECIALISTA, JEFE, DIRECTORA: solo sus propios movimientos.
+ * - ESPECIALISTA: solo sus propios movimientos.
+ * - JEFE / DIRECTORA: su equipo (o solo los propios con alcance='propios').
  * - VIGILANTE, RRHH, ADMIN: pueden consultar todos, con filtros opcionales.
  */
 export async function listarMovimientos(req: Request, res: Response): Promise<void> {
@@ -248,15 +285,21 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
       return;
     }
 
-    const { usuarioId, fechaInicio, fechaFin, jefaturaId } =
+    const { usuarioId, fechaInicio, fechaFin, jefaturaId, alcance } =
       req.query as unknown as z.infer<typeof listarMovimientosQuerySchema>;
 
     const where: Prisma.MovimientoWhereInput = {};
 
-    if (ROLES_SOLO_PROPIOS.includes(usuarioToken.rol)) {
-      // Estos roles solo pueden ver sus propios movimientos,
-      // sin importar lo que se haya enviado en usuarioId.
-      where.usuarioId = usuarioToken.id;
+    const idsPermitidos = await resolverIdsAsistencia(usuarioToken, alcance);
+
+    if (idsPermitidos !== null) {
+      // Solo se acepta el usuarioId solicitado si está dentro del alcance;
+      // en caso contrario se devuelve el alcance completo permitido.
+      if (usuarioId !== undefined && idsPermitidos.includes(usuarioId)) {
+        where.usuarioId = usuarioId;
+      } else {
+        where.usuarioId = { in: idsPermitidos };
+      }
     } else if (usuarioId !== undefined) {
       where.usuarioId = usuarioId;
     }
@@ -312,17 +355,39 @@ export async function listarMovimientos(req: Request, res: Response): Promise<vo
 
 /**
  * GET /api/asistencias/presencia
- * Roles: VIGILANTE, ADMIN, RRHH.
- * Devuelve, para cada usuario activo (opcionalmente filtrado por
- * jefaturaId), su estado actual: PRESENTE si su último movimiento de
- * hoy es ENTRADA; AUSENTE en cualquier otro caso (incluido "sin
- * movimientos hoy").
+ * Roles: VIGILANTE, ADMIN, RRHH, JEFE, DIRECTORA.
+ * Devuelve, para cada usuario activo visible para el usuario autenticado
+ * (opcionalmente filtrado por jefaturaId), su estado actual: PRESENTE si
+ * su último movimiento de hoy es ENTRADA; AUSENTE en cualquier otro caso
+ * (incluido "sin movimientos hoy").
+ *
+ * Visibilidad:
+ * - ADMIN, RRHH y VIGILANTE ven a todos los usuarios activos.
+ * - JEFE ve únicamente a sus subordinados (jefeId === su id) y a sí mismo.
+ * - DIRECTORA ve a los jefes y a sí misma.
+ * Tanto JEFE como DIRECTORA pueden limitar el resultado a sí mismos con
+ * `alcance=propios`.
  */
 export async function obtenerPresencia(req: Request, res: Response): Promise<void> {
   try {
-    const { jefaturaId } = req.query as unknown as z.infer<typeof obtenerPresenciaQuerySchema>;
+    const usuarioToken = req.usuario;
+    if (!usuarioToken) {
+      res.status(401).json({ mensaje: 'No autenticado' });
+      return;
+    }
+
+    const { jefaturaId, alcance } =
+      req.query as unknown as z.infer<typeof obtenerPresenciaQuerySchema>;
 
     const whereUsuario: Prisma.UsuarioWhereInput = { activo: true };
+
+    // Filtro por jerarquía para JEFE y DIRECTORA (Bloque A). El resto de
+    // roles conserva la visibilidad global.
+    const idsPermitidos = await resolverIdsAsistencia(usuarioToken, alcance);
+
+    if (idsPermitidos !== null) {
+      whereUsuario.id = { in: idsPermitidos };
+    }
 
     if (jefaturaId !== undefined) {
       whereUsuario.jefaturaId = jefaturaId;

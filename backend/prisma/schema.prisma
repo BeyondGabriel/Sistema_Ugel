@@ -62,6 +62,19 @@ model Usuario {
   foto                String?
   fechaCreacion       DateTime  @default(now())
 
+  // ── Bloque A: jerarquía, autorización y delegación ──────────
+  // Tratamiento formal con el que se firma/nombra al usuario en los
+  // documentos oficiales (ej. "Lic.", "Ing.", "Mg.", "Dr.").
+  tituloFormal        String?
+  // Marca al usuario como ausente/no disponible: no puede figurar como
+  // aprobador vigente hasta que regrese o exista una delegación activa.
+  noDisponible        Boolean   @default(false)
+
+  // Delegaciones de aprobación (quien delega y quien recibe la delegación)
+  delegacionesComo     Delegacion[] @relation("DelegacionesTitular")
+  delegacionesRecibidas Delegacion[] @relation("DelegacionesEncargado")
+  delegacionesCreadas   Delegacion[] @relation("DelegacionesCreadas")
+
   // Jefatura a la que pertenece el usuario
   jefaturaId          Int?
   jefatura            Jefatura? @relation("UsuariosDeJefatura", fields: [jefaturaId], references: [id])
@@ -107,6 +120,12 @@ model Jefatura {
   nombre      String   @unique
   descripcion String?
 
+  // Bloque A: las jefaturas oficiales (Dirección, Gestión Pedagógica,
+  // Unidad de Administración, UPDI) se crean desde el seed y NO pueden
+  // eliminarse; solo las jefaturas internas creadas por el Admin pueden
+  // borrarse.
+  esOficial   Boolean  @default(false)
+
   // Usuarios que pertenecen a esta jefatura (vía Usuario.jefaturaId)
   usuarios    Usuario[] @relation("UsuariosDeJefatura")
 
@@ -148,7 +167,6 @@ model Papeleta {
   estado            EstadoPapeleta @default(PENDIENTE)
 
   token             String?        @unique // 6 caracteres, generado al aprobar
-  fechaAprobacion   DateTime?      // momento en que la papeleta pasó a APROBADO
   motivoRechazo     String?
   motivoAnulacion   String?
 
@@ -158,6 +176,11 @@ model Papeleta {
   fechaAnulacion    DateTime?
 
   fechaRevision     DateTime?      // momento en que el aprobador abrió la revisión (EN_REVISION)
+
+  // Bloque A: la papeleta quedó bloqueada porque no se pudo resolver un
+  // aprobador válido (BLOQUEO_P1C / BLOQUEO_SIN_APROBADOR). Queda en
+  // PENDIENTE sin aprobador y visible para el ADMIN, que debe intervenir.
+  requiereAprobadorEspecial Boolean @default(false)
 
   firmaExternaSvg   String?        // path/URL al archivo SVG almacenado en Supabase
 
@@ -193,7 +216,7 @@ model Notificacion {
   id        Int      @id @default(autoincrement())
   usuarioId Int
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
-  mensaje   String
+  mensaje   String   @db.VarChar(500)
   leida     Boolean  @default(false)
   fecha     DateTime @default(now())
 
@@ -214,4 +237,39 @@ model TokenVerificacion {
 
   @@index([papeletaId])
   @@index([usuarioConsultanteId])
+}
+
+// ---------------------------
+// BLOQUE A: DELEGACIÓN DE APROBACIÓN
+// ---------------------------
+
+/// Delegación temporal de la facultad de aprobar papeletas de un titular
+/// (JEFE o DIRECTORA) hacia un encargado activo. Mientras la delegación está
+/// vigente (activo = true y fechaInicio <= ahora <= fechaFin), las papeletas
+/// que le corresponderían al titular se enrutan automáticamente al encargado.
+model Delegacion {
+  id          Int      @id @default(autoincrement())
+
+  titularId   Int
+  titular     Usuario  @relation("DelegacionesTitular", fields: [titularId], references: [id])
+
+  encargadoId Int
+  encargado   Usuario  @relation("DelegacionesEncargado", fields: [encargadoId], references: [id])
+
+  motivo       String?  @db.VarChar(1000)
+  documentoRef String?  @db.VarChar(500)
+
+  fechaInicio DateTime
+  fechaFin    DateTime
+  activo      Boolean  @default(true)
+
+  creadoPorId Int?
+  creadoPor   Usuario? @relation("DelegacionesCreadas", fields: [creadoPorId], references: [id])
+
+  fechaCreacion DateTime @default(now())
+
+  @@index([titularId])
+  @@index([encargadoId])
+  @@index([creadoPorId])
+  @@index([activo, fechaInicio, fechaFin])
 }

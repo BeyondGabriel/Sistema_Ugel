@@ -21,6 +21,10 @@ export interface DatosCrearUsuario {
   apellidos: string;
   jefaturaId?: number | null;
   jefeId?: number | null;
+  /** Bloque A: tratamiento formal usado en documentos oficiales. */
+  tituloFormal?: string | null;
+  /** Bloque A: marca al usuario como P1C / no disponible para aprobar. */
+  noDisponible?: boolean;
 }
 
 export interface DatosEditarUsuario {
@@ -31,6 +35,10 @@ export interface DatosEditarUsuario {
   jefaturaId?: number | null;
   jefeId?: number | null;
   activo?: boolean;
+  /** Bloque A: tratamiento formal usado en documentos oficiales. */
+  tituloFormal?: string | null;
+  /** Bloque A: marca al usuario como P1C / no disponible para aprobar. */
+  noDisponible?: boolean;
 }
 
 export interface DatosJefatura {

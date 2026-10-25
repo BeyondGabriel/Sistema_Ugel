@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { adminService, type DatosCrearUsuario, type DatosEditarUsuario } from '../../services/admin.service';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -29,8 +30,11 @@ function validarPassword(pwd: string): string | null {
 export function UsuarioFormPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { mostrar } = useToast();
   const esEdicion = Boolean(id);
+  // Bloque A: título formal y marca P1C solo los gestiona el Administrador.
+  const esAdmin = user?.rol === 'ADMIN';
 
   const [nombres, setNombres] = useState('');
   const [apellidos, setApellidos] = useState('');
@@ -40,6 +44,8 @@ export function UsuarioFormPage() {
   const [jefeId, setJefeId] = useState<number | ''>('');
   const [password, setPassword] = useState('');
   const [activo, setActivo] = useState(true);
+  const [tituloFormal, setTituloFormal] = useState('');
+  const [noDisponible, setNoDisponible] = useState(false);
   const [errores, setErrores] = useState<Record<string, string>>({});
 
   const [jefaturas, setJefaturas] = useState<Jefatura[]>([]);
@@ -76,6 +82,8 @@ export function UsuarioFormPage() {
         setJefaturaId(usuario.jefaturaId ?? '');
         setJefeId(usuario.jefeId ?? '');
         setActivo(usuario.activo);
+        setTituloFormal(usuario.tituloFormal ?? '');
+        setNoDisponible(usuario.noDisponible ?? false);
       } catch {
         mostrar('No se pudo cargar el usuario', 'error');
         navigate('/usuarios');
@@ -119,6 +127,9 @@ export function UsuarioFormPage() {
           jefaturaId: jefaturaId || null,
           jefeId: jefeId || null,
           activo,
+          ...(esAdmin
+            ? { tituloFormal: tituloFormal.trim() || null, noDisponible }
+            : {}),
         };
         await adminService.editarUsuario(Number(id), datos);
         mostrar('Usuario actualizado correctamente', 'success');
@@ -131,6 +142,9 @@ export function UsuarioFormPage() {
           jefaturaId: jefaturaId || null,
           jefeId: jefeId || null,
           ...(password ? { password } : {}),
+          ...(esAdmin
+            ? { tituloFormal: tituloFormal.trim() || null, noDisponible }
+            : {}),
         };
         const { passwordGenerada, advertencia } = await adminService.crearUsuario(datos);
         if (passwordGenerada) {
@@ -249,6 +263,43 @@ export function UsuarioFormPage() {
               ))}
             </select>
           </div>
+
+          {/* Bloque A: datos de autorización (solo Administrador) */}
+          {esAdmin && (
+            <div className="mt-4 rounded-lg border border-gray-700 bg-gray-900/40 p-4">
+              <p className="text-sm font-semibold text-gray-200">Autorización</p>
+              <p className="mb-3 text-xs text-gray-500">
+                Define el tratamiento formal del usuario en los documentos oficiales y si
+                puede recibir papeletas para aprobar.
+              </p>
+              <Input
+                label="Título formal (documentos oficiales)"
+                value={tituloFormal}
+                onChange={(e) => setTituloFormal(e.target.value)}
+                error={errores.tituloFormal}
+                placeholder="Ej. Director(a) de la UGEL Talara"
+                maxLength={150}
+              />
+              <div className="mt-3 flex items-start gap-3">
+                <input
+                  id="noDisponible"
+                  type="checkbox"
+                  checked={noDisponible}
+                  onChange={(e) => setNoDisponible(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-600 bg-gray-800 text-emerald-500 focus:ring-emerald-500"
+                />
+                <div>
+                  <label htmlFor="noDisponible" className="text-sm font-medium text-gray-300">
+                    No disponible para aprobar (P1C)
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Las papeletas que le corresponderían se derivan a su jefe o quedan
+                    bloqueadas para el Administrador si no hay delegación vigente.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Contraseña */}
           <div className="mt-4">

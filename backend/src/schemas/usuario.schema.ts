@@ -37,6 +37,20 @@ const passwordSchema = z
   .string({ error: 'La contraseña debe ser un texto' })
   .min(8, 'La contraseña debe tener mínimo 8 caracteres');
 
+/**
+ * Título formal con el que se identifica al usuario en documentos oficiales
+ * (p. ej. "Director(a) de la UGEL Talara"). Solo tiene sentido para JEFE y
+ * DIRECTORA; el controlador lo ignora para otros roles.
+ */
+const tituloFormalSchema = z
+  .string({ error: 'El título formal debe ser un texto' })
+  .trim()
+  .max(150, 'El título formal no puede superar los 150 caracteres');
+
+const noDisponibleSchema = z.boolean({
+  error: 'El campo noDisponible debe ser verdadero o falso',
+});
+
 export const crearUsuarioSchema = z
   .object({
     email: emailSchema,
@@ -52,6 +66,10 @@ export const crearUsuarioSchema = z
     jefaturaId: idSchema.nullable().optional(),
 
     jefeId: idSchema.nullable().optional(),
+
+    tituloFormal: tituloFormalSchema.nullable().optional(),
+
+    noDisponible: noDisponibleSchema.optional(),
   })
   .strict();
   
@@ -68,6 +86,10 @@ export const editarUsuarioSchema = z
     jefaturaId: idSchema.nullable().optional(),
 
     jefeId: idSchema.nullable().optional(),
+
+    tituloFormal: tituloFormalSchema.nullable().optional(),
+
+    noDisponible: noDisponibleSchema.optional(),
 
     activo: z.boolean({
       error: 'El campo activo debe ser verdadero o falso',

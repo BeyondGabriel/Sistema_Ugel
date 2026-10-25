@@ -98,6 +98,22 @@ export const papeletaService = {
     return res.papeleta;
   },
 
+  /**
+   * Bloque A: el ADMIN reasigna el aprobador de una papeleta bloqueada
+   * (`requiereAprobadorEspecial`). Solo aplica a papeletas PENDIENTE.
+   */
+  async desbloquear(
+    id: number,
+    aprobadorId: number,
+    comentario?: string
+  ): Promise<Papeleta> {
+    const { data: res } = await api.put<RespuestaPapeleta>(`/papeletas/${id}/desbloquear`, {
+      aprobadorId,
+      ...(comentario ? { comentario } : {}),
+    });
+    return res.papeleta;
+  },
+
   async solicitarAnulacion(id: number): Promise<Papeleta> {
     const { data: res } = await api.post<RespuestaPapeleta>(`/papeletas/${id}/solicitar-anulacion`);
     return res.papeleta;

@@ -7,8 +7,11 @@ import {
   XMarkIcon,
   ChatBubbleLeftIcon,
   NoSymbolIcon,
+  ExclamationTriangleIcon,
+  LockOpenIcon,
 } from '@heroicons/react/24/outline';
 import { papeletaService } from '../../services/papeleta.service';
+import { adminService } from '../../services/admin.service';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useSocket } from '../../hooks/useSocket';
@@ -16,7 +19,7 @@ import type { CambioPapeleta } from '../../contexts/SocketContext';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Modal';
-import type { Papeleta, EstadoPapeleta } from '../../types';
+import type { Papeleta, EstadoPapeleta, Usuario } from '../../types';
 
 function formatFechaHora(ts: string): string {
   return new Date(ts).toLocaleString('es-PE', {
@@ -86,6 +89,13 @@ export function DetallePapeletaPage() {
   const [errorTexto, setErrorTexto] = useState('');
   const [modalCancelar, setModalCancelar] = useState(false);
 
+  // Bloque A: desbloqueo de papeletas sin aprobador (solo ADMIN).
+  const [modalDesbloqueo, setModalDesbloqueo] = useState(false);
+  const [usuariosAprobadores, setUsuariosAprobadores] = useState<Usuario[]>([]);
+  const [cargandoAprobadores, setCargandoAprobadores] = useState(false);
+  const [aprobadorSeleccionado, setAprobadorSeleccionado] = useState<number | ''>('');
+  const [comentarioDesbloqueo, setComentarioDesbloqueo] = useState('');
+
   async function cargar(silencioso = false) {
     if (!id) return;
     // Los refrescos disparados por socket no muestran el spinner: así el
@@ -142,8 +152,10 @@ export function DetallePapeletaPage() {
       const actualizada = await fn();
       setPapeleta(actualizada);
       mostrar(mensajeOk, 'success');
+      return true;
     } catch (err) {
       mostrar(extractMsg(err), 'error');
+      return false;
     } finally {
       setAccionando(false);
     }
@@ -176,6 +188,50 @@ export function DetallePapeletaPage() {
       );
   }
 
+  // ─── Bloque A: desbloqueo de papeletas ─────────────────
+  async function abrirDesbloqueo() {
+    setModalDesbloqueo(true);
+    setAprobadorSeleccionado('');
+    setComentarioDesbloqueo('');
+    if (usuariosAprobadores.length > 0) return;
+    setCargandoAprobadores(true);
+    try {
+      const lista = await adminService.listarUsuarios({ activo: true });
+      setUsuariosAprobadores(
+        lista.filter(
+          (u) =>
+            ['ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'].includes(u.rol) &&
+            u.id !== papeleta?.solicitanteId
+        )
+      );
+    } catch {
+      mostrar('No se pudo cargar la lista de aprobadores', 'error');
+    } finally {
+      setCargandoAprobadores(false);
+    }
+  }
+
+  async function confirmarDesbloqueo() {
+    if (!papeleta) return;
+    if (!aprobadorSeleccionado) {
+      mostrar('Selecciona un aprobador', 'error');
+      return;
+    }
+    const ok = await ejecutarAccion(
+      () =>
+        papeletaService.desbloquear(
+          papeleta.id,
+          Number(aprobadorSeleccionado),
+          comentarioDesbloqueo.trim() || undefined
+        ),
+      'Papeleta desbloqueada y reasignada'
+    );
+    if (!ok) return;
+    setModalDesbloqueo(false);
+    setAprobadorSeleccionado('');
+    setComentarioDesbloqueo('');
+  }
+
   if (cargando) {
     return (
       <div className="flex justify-center py-20">
@@ -187,8 +243,16 @@ export function DetallePapeletaPage() {
   if (!papeleta) return null;
 
   const esSolicitante = papeleta.solicitanteId === user?.id;
-  const esAprobador = papeleta.aprobadorId === user?.id;
   const esAdmin = user?.rol === 'ADMIN';
+  // Bloque A: solo estos roles pueden aprobar/rechazar/observar (backend 403).
+  const puedeAprobarRol = ['ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'].includes(
+    user?.rol ?? ''
+  );
+  const esAprobador = puedeAprobarRol && papeleta.aprobadorId === user?.id;
+  const esVigilante = user?.rol === 'VIGILANTE';
+  // Papeleta creada sin aprobador resoluble: solo el Admin puede reasignarla.
+  const estaBloqueada =
+    Boolean(papeleta.requiereAprobadorEspecial) && papeleta.aprobadorId === null;
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -314,6 +378,43 @@ export function DetallePapeletaPage() {
           />
         )}
       </Card>
+
+      {/* Bloque A: papeleta bloqueada sin aprobador */}
+      {estaBloqueada && (
+        <div className="rounded-xl border border-amber-600/60 bg-amber-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-400" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-300">
+                Papeleta bloqueada: sin aprobador asignado
+              </p>
+              <p className="mt-1 text-sm text-amber-200/80">
+                {esAdmin
+                  ? 'La jerarquía no permitió resolver un aprobador disponible (titular no disponible o sin delegación vigente). Asígnale un aprobador para que pueda continuar.'
+                  : 'La jerarquía no permitió resolver un aprobador disponible. El Administrador debe reasignar esta papeleta antes de que pueda aprobarse.'}
+              </p>
+              {esAdmin && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="mt-3"
+                  disabled={accionando}
+                  onClick={() => void abrirDesbloqueo()}
+                >
+                  <LockOpenIcon className="h-4 w-4" /> Desbloquear y asignar aprobador
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bloque A: aviso de solo lectura para Vigilante */}
+      {esVigilante && !esSolicitante && (
+        <p className="rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-xs text-gray-400">
+          Perfil Vigilante: esta papeleta es de solo lectura.
+        </p>
+      )}
 
       {/* Acciones */}
       <div className="flex flex-wrap gap-3">
@@ -463,6 +564,70 @@ export function DetallePapeletaPage() {
             </Button>
             <Button variant="primary" onClick={confirmarModal} disabled={accionando}>
               {accionando ? 'Procesando...' : 'Confirmar'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bloque A: modal de desbloqueo (ADMIN) */}
+      <Modal
+        isOpen={modalDesbloqueo}
+        onClose={() => {
+          if (!accionando) setModalDesbloqueo(false);
+        }}
+        title="Desbloquear papeleta"
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-300">
+            Asigna un aprobador disponible para la papeleta N° {papeleta.numero}.
+            Quedará en estado <strong>Pendiente</strong> y se notificará al solicitante.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-300">Aprobador</label>
+            <select
+              value={aprobadorSeleccionado}
+              onChange={(e) =>
+                setAprobadorSeleccionado(
+                  e.target.value ? Number(e.target.value) : ''
+                )
+              }
+              disabled={cargandoAprobadores}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">
+                {cargandoAprobadores ? 'Cargando…' : 'Selecciona un aprobador'}
+              </option>
+              {usuariosAprobadores.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.tituloFormal
+                    ? `${u.tituloFormal} — ${u.nombres} ${u.apellidos}`
+                    : `${u.nombres} ${u.apellidos} (${u.rol})`}
+                  {u.noDisponible ? ' · no disponible' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            value={comentarioDesbloqueo}
+            onChange={(e) => setComentarioDesbloqueo(e.target.value)}
+            placeholder="Comentario para la trazabilidad (opcional)"
+            rows={3}
+            className="w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              disabled={accionando}
+              onClick={() => setModalDesbloqueo(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              disabled={accionando || !aprobadorSeleccionado}
+              onClick={() => void confirmarDesbloqueo()}
+            >
+              {accionando ? 'Procesando…' : 'Desbloquear'}
             </Button>
           </div>
         </div>

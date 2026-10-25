@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Rol, Prisma } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { verificarPresencia } from '../services/visita.service';
+import { obtenerIdsEquipo } from '../services/visibilidadPapeletas.service';
 import { notificar } from '../services/notificacion.service';
 import { parseFechaLocal } from '../utils/fechas';
 import {
@@ -16,7 +17,42 @@ import {
 } from '../schemas/visita.schema';
 
 /** Roles que solo pueden ver las visitas que ellos mismos recibieron. */
-const ROLES_SOLO_PROPIAS_RECIBIDAS: Rol[] = [Rol.ESPECIALISTA, Rol.JEFE, Rol.DIRECTORA];
+const ROLES_SOLO_PROPIAS_RECIBIDAS: Rol[] = [Rol.ESPECIALISTA];
+
+/** Alcance solicitado por el cliente para los roles con equipo a cargo. */
+type AlcanceConsulta = 'propios' | 'equipo';
+
+/**
+ * Resuelve los ids de trabajadores cuyas visitas puede ver el usuario
+ * autenticado (Bloque A):
+ * - ESPECIALISTA: solo las que él recibió.
+ * - JEFE: las de su equipo (él + subordinados) o solo las propias.
+ * - DIRECTORA: las de ella + jefes, o solo las propias.
+ * - VIGILANTE, RRHH, ADMIN: null → todas.
+ */
+async function resolverIdsVisitados(
+  usuarioToken: Express.Request['usuario'],
+  alcance: AlcanceConsulta | undefined,
+): Promise<number[] | null> {
+  if (!usuarioToken) {
+    return [];
+  }
+
+  if (ROLES_SOLO_PROPIAS_RECIBIDAS.includes(usuarioToken.rol)) {
+    return [usuarioToken.id];
+  }
+
+  if (usuarioToken.rol === Rol.JEFE || usuarioToken.rol === Rol.DIRECTORA) {
+    if (alcance === 'propios') {
+      return [usuarioToken.id];
+    }
+
+    return obtenerIdsEquipo(usuarioToken);
+  }
+
+  return null;
+}
+
 
 /**
  * POST /api/visitas
@@ -159,7 +195,9 @@ export async function marcarGafete(req: Request, res: Response): Promise<void> {
 /**
  * GET /api/visitas
  * Visibilidad:
- * - ESPECIALISTA, JEFE, DIRECTORA: solo las visitas que ellos recibieron.
+ * - ESPECIALISTA: solo las visitas que recibió.
+ * - JEFE / DIRECTORA: las de su equipo (o solo las propias con
+ *   alcance='propios').
  * - VIGILANTE, RRHH, ADMIN: todas, con filtros opcionales.
  */
 export async function listarVisitas(req: Request, res: Response): Promise<void> {
@@ -170,13 +208,23 @@ export async function listarVisitas(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const { fechaInicio, fechaFin, trabajadorVisitadoId, registradorId } =
+    const { fechaInicio, fechaFin, trabajadorVisitadoId, registradorId, alcance } =
       req.query as unknown as z.infer<typeof listarVisitasQuerySchema>;
 
     const where: Prisma.VisitaWhereInput = {};
 
-    if (ROLES_SOLO_PROPIAS_RECIBIDAS.includes(usuarioToken.rol)) {
-      where.trabajadorVisitadoId = usuarioToken.id;
+    const idsPermitidos = await resolverIdsVisitados(usuarioToken, alcance);
+
+    if (idsPermitidos !== null) {
+      // El filtro explícito solo se respeta si cae dentro del alcance.
+      if (
+        trabajadorVisitadoId !== undefined &&
+        idsPermitidos.includes(trabajadorVisitadoId)
+      ) {
+        where.trabajadorVisitadoId = trabajadorVisitadoId;
+      } else {
+        where.trabajadorVisitadoId = { in: idsPermitidos };
+      }
     } else {
       if (trabajadorVisitadoId !== undefined) {
         where.trabajadorVisitadoId = trabajadorVisitadoId;
@@ -252,7 +300,12 @@ export async function obtenerVisita(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    if (ROLES_SOLO_PROPIAS_RECIBIDAS.includes(usuarioToken.rol) && visita.trabajadorVisitadoId !== usuarioToken.id) {
+    const idsPermitidos = await resolverIdsVisitados(usuarioToken, undefined);
+
+    if (
+      idsPermitidos !== null &&
+      !idsPermitidos.includes(visita.trabajadorVisitadoId)
+    ) {
       res.status(403).json({ mensaje: 'No tiene permisos para ver esta visita' });
       return;
     }

@@ -74,5 +74,12 @@ export const listarVisitasQuerySchema = z
     trabajadorVisitadoId: idSchema.optional(),
 
     registradorId: idSchema.optional(),
+
+    // Bloque A: JEFE y DIRECTORA alternan entre sus visitas y las de su equipo.
+    alcance: z
+      .enum(['propios', 'equipo'], {
+        error: 'alcance debe ser propios o equipo',
+      })
+      .optional(),
   })
   .strict();

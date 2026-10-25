@@ -29,7 +29,10 @@ export function VisitasPage() {
   const { mostrar } = useToast();
 
   const puedeAccionar = user?.rol === 'VIGILANTE' || user?.rol === 'ADMIN';
-  const puedeVerTodos = ['VIGILANTE', 'ADMIN', 'RRHH'].includes(user?.rol ?? '');
+  // Bloque A: JEFE y DIRECTORA ven las visitas de su equipo según jerarquía.
+  const esJefeODirectora = user?.rol === 'JEFE' || user?.rol === 'DIRECTORA';
+  // GET /usuarios solo está disponible para ADMIN, RRHH y VIGILANTE.
+  const puedeListarUsuarios = ['ADMIN', 'RRHH', 'VIGILANTE'].includes(user?.rol ?? '');
 
   const [visitas, setVisitas] = useState<Visita[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -40,12 +43,16 @@ export function VisitasPage() {
   const [fechaInicio, setFechaInicio] = useState(fechaHaceDiasLocal(7));
   const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
   const [trabajadorFiltro, setTrabajadorFiltro] = useState<number | ''>('');
+  const [alcance, setAlcance] = useState<'propios' | 'equipo'>('equipo');
 
   useEffect(() => {
-    if (puedeVerTodos) {
-      adminService.listarUsuarios({ activo: true }).then((data: Usuario[]) => setUsuarios(data));
+    if (puedeListarUsuarios) {
+      adminService
+        .listarUsuarios({ activo: true })
+        .then((data: Usuario[]) => setUsuarios(data))
+        .catch(() => setUsuarios([]));
     }
-  }, [puedeVerTodos]);
+  }, [puedeListarUsuarios]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -53,7 +60,8 @@ export function VisitasPage() {
       const data = await visitaService.listarVisitas({
         fechaInicio,
         fechaFin,
-        trabajadorVisitadoId: puedeVerTodos && trabajadorFiltro ? trabajadorFiltro : undefined,
+        trabajadorVisitadoId: puedeListarUsuarios && trabajadorFiltro ? trabajadorFiltro : undefined,
+        ...(esJefeODirectora ? { alcance } : {}),
       });
       // El backend devuelve { visitas: [...] }
       setVisitas(data.visitas ?? []);
@@ -62,7 +70,15 @@ export function VisitasPage() {
     } finally {
       setCargando(false);
     }
-  }, [fechaInicio, fechaFin, trabajadorFiltro, puedeVerTodos, mostrar]);
+  }, [
+    fechaInicio,
+    fechaFin,
+    trabajadorFiltro,
+    puedeListarUsuarios,
+    esJefeODirectora,
+    alcance,
+    mostrar,
+  ]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -141,6 +157,30 @@ export function VisitasPage() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
         <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+        {esJefeODirectora && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Alcance</span>
+            <div className="inline-flex overflow-hidden rounded-lg border border-gray-600">
+              {([
+                { valor: 'equipo', label: 'Mis subordinados' },
+                { valor: 'propios', label: 'Solo mis registros' },
+              ] as const).map((opcion) => (
+                <button
+                  key={opcion.valor}
+                  type="button"
+                  onClick={() => setAlcance(opcion.valor)}
+                  className={`px-3 py-1.5 text-sm transition-colors ${
+                    alcance === opcion.valor
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {opcion.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-gray-500">Desde</span>
           <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={INPUT_CLS} />
@@ -149,7 +189,7 @@ export function VisitasPage() {
           <span className="text-xs text-gray-500">Hasta</span>
           <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={INPUT_CLS} />
         </div>
-        {puedeVerTodos && (
+        {puedeListarUsuarios && (
           <div className="flex flex-col gap-1">
             <span className="text-xs text-gray-500">Trabajador visitado</span>
             <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value ? Number(e.target.value) : '')} className={INPUT_CLS}>

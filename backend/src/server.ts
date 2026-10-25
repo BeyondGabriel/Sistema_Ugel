@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import app from './app';
-import { inicializarSocket } from './sockets/io';
+import { inicializarSocket, SALA_ADMIN } from './sockets/io';
 import { revertirRevisionesExpiradas } from './services/papeleta.service';
 import {
   cerrarSolicitudesExpiradas,
@@ -134,6 +134,12 @@ io.on('connection', (socket: Socket) => {
   const sala = `usuario:${usuario.id}`;
 
   socket.join(sala);
+
+  // Bloque A: los administradores comparten una sala para recibir avisos
+  // transversales (p. ej. `papeleta:bloqueada`) sin conocer ids concretos.
+  if (usuario.rol === 'ADMIN') {
+    socket.join(SALA_ADMIN);
+  }
 
   console.log(
     `Socket conectado: usuario ${usuario.id} (${usuario.email}) → sala ${sala}`

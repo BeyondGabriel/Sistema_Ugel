@@ -98,6 +98,18 @@ export const asistenciaIdParamsSchema = z
   .strict();
 
 /**
+ * Alcance de consulta para JEFE y DIRECTORA (Bloque A):
+ * - 'propios': solo sus propios registros.
+ * - 'equipo': su equipo según jerarquía (por defecto).
+ * El resto de roles ignora este parámetro.
+ */
+const alcanceSchema = z
+  .enum(['propios', 'equipo'], {
+    error: 'alcance debe ser propios o equipo',
+  })
+  .optional();
+
+/**
  * GET /api/asistencias
  */
 export const listarMovimientosQuerySchema = z
@@ -109,6 +121,8 @@ export const listarMovimientosQuerySchema = z
     fechaFin: fechaFiltroSchema.optional(),
 
     jefaturaId: idSchema.optional(),
+
+    alcance: alcanceSchema,
   })
   .strict();
 
@@ -118,5 +132,7 @@ export const listarMovimientosQuerySchema = z
 export const obtenerPresenciaQuerySchema = z
   .object({
     jefaturaId: idSchema.optional(),
+
+    alcance: alcanceSchema,
   })
   .strict();

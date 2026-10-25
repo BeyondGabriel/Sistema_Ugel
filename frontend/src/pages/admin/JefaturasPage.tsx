@@ -171,6 +171,14 @@ export function JefaturasPage() {
                     <div className="flex items-center gap-2">
                       <BuildingOfficeIcon className="h-4 w-4 text-gray-500" />
                       {j.nombre}
+                      {j.esOficial && (
+                        <span
+                          className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400"
+                          title="Jefatura oficial de la UGEL: no puede eliminarse"
+                        >
+                          Oficial
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-400">{j.descripcion ?? '—'}</td>
@@ -183,13 +191,17 @@ export function JefaturasPage() {
                         <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(j)}>
                           <PencilIcon className="h-4 w-4" /> Editar
                         </Button>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => setModalEliminar({ abierto: true, jefatura: j, eliminando: false })}
-                        >
-                          <TrashIcon className="h-4 w-4" /> Eliminar
-                        </Button>
+                        {/* Las jefaturas oficiales (Dirección, Gestión Pedagógica,
+                            Unidad de Administración, UPDI) no se pueden eliminar. */}
+                        {!j.esOficial && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => setModalEliminar({ abierto: true, jefatura: j, eliminando: false })}
+                          >
+                            <TrashIcon className="h-4 w-4" /> Eliminar
+                          </Button>
+                        )}
                       </div>
                     </td>
                   )}

@@ -16,6 +16,7 @@ import visitaRoutes from './routes/visita.routes';
 import firmaExternaRoutes from './routes/firmaExterna.routes';
 import notificacionRoutes from './routes/notificacion.routes';
 import jefaturaRoutes from './routes/jefatura.routes';
+import delegacionRoutes from './routes/delegacion.routes';
 
 import { authJWT } from './middlewares/authJWT';
 import { exigirCambioPassword } from './middlewares/exigirCambioPassword';
@@ -80,6 +81,7 @@ app.use('/api/papeletas', papeletaRoutes);
 app.use('/api/visitas', visitaRoutes);
 app.use('/api/notificaciones', notificacionRoutes);
 app.use('/api/jefaturas', jefaturaRoutes);
+app.use('/api/delegaciones', delegacionRoutes);
 
 // Middleware de manejo de errores global.
 // Debe registrarse al final, después de todas las rutas,

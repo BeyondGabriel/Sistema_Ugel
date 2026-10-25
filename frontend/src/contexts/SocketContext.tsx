@@ -20,12 +20,27 @@ export interface CambioPapeleta {
   estado: string;
 }
 
+/**
+ * Bloque A: aviso de papeleta que quedó sin aprobador válido (jerarquía
+ * incompleta o titular P1C sin delegación). El backend lo emite únicamente a
+ * la sala `admin`, por lo que solo los ADMIN lo reciben.
+ */
+export interface PapeletaBloqueada {
+  papeletaId: number;
+  numero: string;
+  codigo: string;
+  mensaje: string;
+  solicitanteId: number;
+}
+
 export interface SocketContextValue {
   socket: Socket | null;
   notificacionesSocket: Omit<Notificacion, 'usuarioId'>[];
   limpiarNotificacionesSocket: () => void;
   papeletaCambios: CambioPapeleta[];
   limpiarPapeletaCambios: () => void;
+  papeletasBloqueadas: PapeletaBloqueada[];
+  limpiarPapeletasBloqueadas: () => void;
 }
 
 export const SocketContext = createContext<SocketContextValue>({
@@ -34,12 +49,15 @@ export const SocketContext = createContext<SocketContextValue>({
   limpiarNotificacionesSocket: () => {},
   papeletaCambios: [],
   limpiarPapeletaCambios: () => {},
+  papeletasBloqueadas: [],
+  limpiarPapeletasBloqueadas: () => {},
 });
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [notificacionesSocket, setNotificacionesSocket] = useState<Omit<Notificacion, 'usuarioId'>[]>([]);
   const [papeletaCambios, setPapeletaCambios] = useState<CambioPapeleta[]>([]);
+  const [papeletasBloqueadas, setPapeletasBloqueadas] = useState<PapeletaBloqueada[]>([]);
   const { mostrar } = useToast();
 
   const limpiarNotificacionesSocket = useCallback(() => {
@@ -48,6 +66,10 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   const limpiarPapeletaCambios = useCallback(() => {
     setPapeletaCambios([]);
+  }, []);
+
+  const limpiarPapeletasBloqueadas = useCallback(() => {
+    setPapeletasBloqueadas([]);
   }, []);
 
   useEffect(() => {
@@ -85,6 +107,26 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       );
     });
 
+    // Bloque A: papeletas que quedaron sin aprobador válido. Solo llegan a la
+    // sala de administradores, así que el aviso se muestra sin comprobar rol.
+    s.on('papeleta:bloqueada', (payload: PapeletaBloqueada) => {
+      setPapeletasBloqueadas((prev) => {
+        if (prev.some((p) => p.papeletaId === payload.papeletaId)) return prev;
+        return [
+          {
+            papeletaId: payload.papeletaId,
+            numero: payload.numero,
+            codigo: payload.codigo,
+            mensaje: payload.mensaje,
+            solicitanteId: payload.solicitanteId,
+          },
+          ...prev,
+        ].slice(0, 20);
+      });
+
+      mostrar(`Papeleta ${payload.numero} bloqueada: ${payload.mensaje}`, 'warning');
+    });
+
     s.on('disconnect', () => {
       console.log('[Socket.IO] Desconectado');
     });
@@ -106,6 +148,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         limpiarNotificacionesSocket,
         papeletaCambios,
         limpiarPapeletaCambios,
+        papeletasBloqueadas,
+        limpiarPapeletasBloqueadas,
       }}
     >
       {children}

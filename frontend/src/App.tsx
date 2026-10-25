@@ -9,6 +9,7 @@ import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { UsuariosPage } from './pages/admin/UsuariosPage';
 import { UsuarioFormPage } from './pages/admin/UsuarioFormPage';
 import { JefaturasPage } from './pages/admin/JefaturasPage';
+import { DelegacionesPage } from './pages/admin/DelegacionesPage';
 import { AsistenciasPage } from './pages/asistencias/AsistenciasPage';
 import { MisAsistenciasPage } from './pages/asistencias/MisAsistenciasPage';
 import { RegistroAsistenciaPage } from './pages/asistencias/RegistroAsistenciaPage';
@@ -52,9 +53,6 @@ export default function App() {
               <Route path="/asistencias" element={<AsistenciasPage />} />
               <Route path="/mis-asistencias" element={<MisAsistenciasPage />} />
               <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
-              <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
-              <Route path="/papeletas" element={<PapeletasPage />} />
-              <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
               <Route path="/papeletas/:id/reenviar" element={<CrearPapeletaPage />} />
               <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
               <Route path="/papeletas" element={<PapeletasPage />} />
@@ -67,6 +65,7 @@ export default function App() {
               <Route path="/usuarios/nuevo" element={<UsuarioFormPage />} />
               <Route path="/usuarios/:id/editar" element={<UsuarioFormPage />} />
               <Route path="/jefaturas" element={<JefaturasPage />} />
+              <Route path="/delegaciones" element={<DelegacionesPage />} />
             </Route>
 
             {/* ── Redirecciones y 404 ───────────────────── */}

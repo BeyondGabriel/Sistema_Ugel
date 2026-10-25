@@ -15,6 +15,21 @@
 import prisma from '../utils/prisma';
 import { getIO } from '../sockets/io';
 
+/** Longitud máxima del campo Notificacion.mensaje (VARCHAR(500)). */
+const MENSAJE_MAX_LENGTH = 500;
+
+/**
+ * Recorta un mensaje a MENSAJE_MAX_LENGTH caracteres.
+ * Si se trunca, se añade "…" al final (1 char reemplaza al último).
+ * Garantiza que notificar() nunca falle con P2000 por longitud.
+ */
+function truncarMensaje(mensaje: string): string {
+  if (mensaje.length <= MENSAJE_MAX_LENGTH) {
+    return mensaje;
+  }
+  return mensaje.slice(0, MENSAJE_MAX_LENGTH - 1) + '…';
+}
+
 export function notificar(usuarioId: number, mensaje: string): void {
   _notificarAsync(usuarioId, mensaje).catch((error) => {
     console.error(`Error al enviar notificación al usuario ${usuarioId}:`, error);
@@ -23,7 +38,7 @@ export function notificar(usuarioId: number, mensaje: string): void {
 
 async function _notificarAsync(usuarioId: number, mensaje: string): Promise<void> {
   const notificacion = await prisma.notificacion.create({
-    data: { usuarioId, mensaje },
+    data: { usuarioId, mensaje: truncarMensaje(mensaje) },
   });
 
   const io = getIO();

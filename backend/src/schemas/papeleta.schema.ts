@@ -260,6 +260,25 @@ export const anularPapeletaSchema = z
   })
   .strict();
 
+/**
+ * PUT /api/papeletas/:id/desbloquear
+ * Usado por el ADMIN para reasignar el aprobador de una papeleta que quedó
+ * con `requiereAprobadorEspecial` (jerarquía incompleta o aprobador P1C sin
+ * delegación).
+ */
+export const desbloquearPapeletaSchema = z
+  .object({
+    aprobadorId: idSchema,
+
+    comentario: z
+      .string({ error: 'comentario debe ser un texto' })
+      .trim()
+      .max(500, 'comentario no puede superar los 500 caracteres')
+      .optional(),
+  })
+  .strict();
+
+
 export const verificarTokenSchema = z
   .object({
     token: z

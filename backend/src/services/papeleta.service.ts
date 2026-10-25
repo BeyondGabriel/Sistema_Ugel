@@ -3,10 +3,11 @@
 // jerarquía de aprobación, bloqueos y timeout de revisión.
 // ===========================================================
 
-import { Rol, EstadoPapeleta, Prisma, Papeleta } from '@prisma/client';
+import { Rol, EstadoPapeleta, Prisma, Papeleta, Usuario } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { generarToken, generarTokenUnico } from '../utils/tokenGenerator';
 import { bloquearRangoPapeleta } from './bloqueos.service';
+import { obtenerDelegacionVigente } from './delegacion.service';
 import { notificar } from './notificacion.service';
 import { emitirCambioPapeleta } from '../sockets/io';
 
@@ -19,13 +20,6 @@ export const MINUTOS_TIMEOUT_REVISION = 20;
 
 /** Cliente de Prisma "normal" o el cliente de una transacción en curso. */
 type ClientePrisma = typeof prisma | Prisma.TransactionClient;
-
-/**
- * Error específico para cuando no se encuentra un aprobador disponible
- * para el rol del solicitante. Permite que el controller distinga este
- * caso (→ 400, mensaje de negocio) de otros errores inesperados (→ 500).
- */
-export class AprobadorNoEncontradoError extends Error {}
 
 /**
  * Calcula el siguiente número consecutivo anual de papeleta, con formato
@@ -62,92 +56,230 @@ export async function generarNumeroPapeleta(año: number, cliente: ClientePrisma
   return `${consecutivoFormateado}-${año}`;
 }
 
+/** Códigos de bloqueo posibles al resolver el aprobador de una papeleta. */
+export const CODIGO_BLOQUEO_P1C = 'BLOQUEO_P1C';
+export const CODIGO_BLOQUEO_SIN_APROBADOR = 'BLOQUEO_SIN_APROBADOR';
+
+export type CodigoBloqueo =
+  | typeof CODIGO_BLOQUEO_P1C
+  | typeof CODIGO_BLOQUEO_SIN_APROBADOR;
+
+/** Mensaje de negocio asociado a cada código de bloqueo. */
+export const MENSAJES_BLOQUEO: Record<CodigoBloqueo, string> = {
+  [CODIGO_BLOQUEO_P1C]:
+    'El aprobador asignado se encuentra no disponible (P1C) y no cuenta con una delegación vigente. La papeleta quedó bloqueada para revisión del Administrador.',
+  [CODIGO_BLOQUEO_SIN_APROBADOR]:
+    'No se pudo determinar un aprobador para el rol del solicitante (jerarquía incompleta o aprobador inactivo). La papeleta quedó bloqueada para revisión del Administrador.',
+};
+
 /**
- * Determina el aprobador de una papeleta según el rol del solicitante:
- * - DIRECTORA: null (auto-aprobación, no necesita aprobador).
- * - ESPECIALISTA: su jefe inmediato (jefeId).
- * - JEFE: la Directora activa.
- * - VIGILANTE: el usuario de RRHH activo.
- * - RRHH / ADMIN: su jefe inmediato (jefeId, asignado vía su jefatura).
+ * Resultado de resolver la cadena de aprobación de una papeleta.
  *
- * Lanza AprobadorNoEncontradoError si no se puede determinar un aprobador
- * y el solicitante no es Directora.
+ * - AUTO_APROBACION: el solicitante es la Directora (regla previa del sistema:
+ *   firma sus propias papeletas y no requiere aprobador).
+ * - OK: hay aprobador. `esRespaldoRRHH` indica que se usó el respaldo de RRHH
+ *   y `esReemplazo` que aprueba por una delegación vigente del titular.
+ * - BLOQUEO_P1C / BLOQUEO_SIN_APROBADOR: no hay aprobador válido; la papeleta
+ *   se crea marcada con `requiereAprobadorEspecial` para el Administrador.
  */
-export async function determinarAprobador(solicitanteId: number): Promise<number | null> {
-  const solicitante = await prisma.usuario.findUnique({
-    where: { id: solicitanteId },
-    include: { jefatura: true },
+export type ResolucionAprobador =
+  | { tipo: 'AUTO_APROBACION' }
+  | {
+      tipo: 'OK';
+      aprobadorId: number;
+      esRespaldoRRHH: boolean;
+      esReemplazo: boolean;
+    }
+  | { tipo: 'BLOQUEO_P1C'; mensaje: string }
+  | { tipo: 'BLOQUEO_SIN_APROBADOR'; mensaje: string };
+
+/** Directora activa de la UGEL (máxima autoridad de la jerarquía). */
+async function buscarDirectoraActiva(): Promise<{ id: number } | null> {
+  return prisma.usuario.findFirst({
+    where: { rol: Rol.DIRECTORA, activo: true },
+    orderBy: { id: 'asc' },
+    select: { id: true },
+  });
+}
+
+/** Primer usuario de RRHH activo y disponible: aprobador de respaldo. */
+async function buscarRespaldoRRHH(): Promise<number | null> {
+  const rrhh = await prisma.usuario.findFirst({
+    where: { rol: Rol.RRHH, activo: true, noDisponible: false },
+    orderBy: { id: 'asc' },
+    select: { id: true },
   });
 
-  if (!solicitante) {
-    throw new Error('Usuario solicitante no encontrado');
-  }
+  return rrhh?.id ?? null;
+}
 
+/**
+ * Determina el aprobador NATURAL (titular de la aprobación) según el rol del
+ * solicitante, antes de aplicar delegaciones:
+ * - ESPECIALISTA / VIGILANTE: su jefe inmediato (`jefeId`).
+ * - JEFE: la Directora activa.
+ * - RRHH / ADMIN: su jefe inmediato; si no tiene, la Directora activa.
+ * - DIRECTORA: null (firma sus propias papeletas, ver resolverAprobadorFinal).
+ *
+ * Devuelve null cuando la jerarquía no permite identificar a nadie.
+ */
+export async function determinarAprobador(solicitante: Usuario): Promise<number | null> {
   switch (solicitante.rol) {
-    case Rol.DIRECTORA:
-      return null;
-
-    case Rol.ESPECIALISTA: {
-      if (!solicitante.jefeId) {
-        throw new AprobadorNoEncontradoError('El especialista no tiene un jefe asignado');
-      }
+    case Rol.ESPECIALISTA:
+    case Rol.VIGILANTE:
       return solicitante.jefeId;
-    }
 
     case Rol.JEFE: {
-      const directora = await prisma.usuario.findFirst({
-        where: { rol: Rol.DIRECTORA, activo: true },
-      });
-      if (!directora) {
-        throw new AprobadorNoEncontradoError('No hay una Directora activa para aprobar la papeleta');
-      }
-      return directora.id;
-    }
-
-    case Rol.VIGILANTE: {
-      const rrhh = await prisma.usuario.findFirst({
-        where: { rol: Rol.RRHH, activo: true },
-      });
-      if (!rrhh) {
-        throw new AprobadorNoEncontradoError('No hay un usuario de RRHH activo para aprobar la papeleta');
-      }
-      return rrhh.id;
+      const directora = await buscarDirectoraActiva();
+      return directora?.id ?? null;
     }
 
     case Rol.RRHH:
     case Rol.ADMIN: {
-      if (!solicitante.jefeId) {
-        throw new AprobadorNoEncontradoError('El usuario no tiene un jefe asignado en su jefatura');
+      if (solicitante.jefeId !== null) {
+        return solicitante.jefeId;
       }
-      return solicitante.jefeId;
+
+      const directora = await buscarDirectoraActiva();
+      return directora?.id ?? null;
     }
 
     default:
-      throw new AprobadorNoEncontradoError('No se pudo determinar un aprobador para el rol del solicitante');
+      return null;
   }
+}
+/** Resultado de bloqueo con el mensaje de negocio asociado al código. */
+function bloqueo(codigo: CodigoBloqueo): ResolucionAprobador {
+  return { tipo: codigo, mensaje: MENSAJES_BLOQUEO[codigo] };
 }
 
 /**
- * Comprueba en la base de datos si `usuarioId` es el aprobador VIGENTE del
- * solicitante `solicitanteId`, usando las reglas de jerarquía actuales
- * (`determinarAprobador`). Evita que un aprobador que quedó obsoleto tras
- * un cambio de jefe/rol siga operando sobre una papeleta.
+ * Respaldo de RRHH: se usa cuando no existe (o no está disponible) el
+ * aprobador natural del solicitante y este no es JEFE. Si tampoco hay RRHH
+ * activo y disponible, la papeleta queda bloqueada sin aprobador.
+ */
+async function resolverRespaldoRRHH(): Promise<ResolucionAprobador> {
+  const rrhhId = await buscarRespaldoRRHH();
+
+  if (rrhhId === null) {
+    return bloqueo(CODIGO_BLOQUEO_SIN_APROBADOR);
+  }
+
+  return {
+    tipo: 'OK',
+    aprobadorId: rrhhId,
+    esRespaldoRRHH: true,
+    esReemplazo: false,
+  };
+}
+
+/**
+ * Resuelve el aprobador FINAL de una papeleta aplicando, en orden:
  *
- * Devuelve `false` cuando no es posible determinar un aprobador vigente.
+ * 1. Auto-aprobación de la Directora (regla previa del sistema).
+ * 2. Aprobador natural según la jerarquía del rol del solicitante.
+ * 3. Sin aprobador natural: JEFE → BLOQUEO_P1C; resto → respaldo de RRHH.
+ * 4. Delegación vigente del aprobador natural → aprueba el encargado.
+ * 5. Aprobador natural inactivo o no disponible: JEFE → BLOQUEO_P1C;
+ *    resto → respaldo de RRHH.
+ *
+ * Nunca lanza por falta de aprobador: devuelve un resultado de bloqueo para
+ * que el controlador cree la papeleta marcada como `requiereAprobadorEspecial`
+ * y avise al Administrador.
+ */
+export async function resolverAprobadorFinal(
+  solicitante: Usuario,
+  fecha: Date = new Date(),
+): Promise<ResolucionAprobador> {
+  // Regla previa del sistema: la Directora firma sus propias papeletas.
+  if (solicitante.rol === Rol.DIRECTORA) {
+    return { tipo: 'AUTO_APROBACION' };
+  }
+
+  const aprobadorNaturalId = await determinarAprobador(solicitante);
+
+  if (aprobadorNaturalId === null || aprobadorNaturalId === solicitante.id) {
+    if (solicitante.rol === Rol.JEFE) {
+      return bloqueo(CODIGO_BLOQUEO_P1C);
+    }
+
+    return resolverRespaldoRRHH();
+  }
+
+  // Delegación vigente: el encargado reemplaza al titular.
+  const delegacion = await obtenerDelegacionVigente(aprobadorNaturalId, fecha);
+
+  if (delegacion) {
+    return {
+      tipo: 'OK',
+      aprobadorId: delegacion.encargadoId,
+      esRespaldoRRHH: false,
+      esReemplazo: true,
+    };
+  }
+
+  const titular = await prisma.usuario.findUnique({
+    where: { id: aprobadorNaturalId },
+    select: { id: true, activo: true, noDisponible: true },
+  });
+
+  if (!titular || !titular.activo || titular.noDisponible) {
+    if (solicitante.rol === Rol.JEFE) {
+      return bloqueo(CODIGO_BLOQUEO_P1C);
+    }
+
+    return resolverRespaldoRRHH();
+  }
+
+  return {
+    tipo: 'OK',
+    aprobadorId: titular.id,
+    esRespaldoRRHH: false,
+    esReemplazo: false,
+  };
+}
+/**
+ * Comprueba si `usuarioId` es el aprobador VIGENTE del solicitante según la
+ * jerarquía y las delegaciones actuales. Incluye el caso de auto-aprobación
+ * (la Directora actuando sobre su propia papeleta) y el respaldo de RRHH,
+ * que puede ser ejercido por cualquier usuario de RRHH activo.
  */
 export async function esAprobadorVigente(
   solicitanteId: number,
   usuarioId: number,
 ): Promise<boolean> {
-  try {
-    const aprobadorActual = await determinarAprobador(solicitanteId);
-    return aprobadorActual !== null && aprobadorActual === usuarioId;
-  } catch (error) {
-    if (error instanceof AprobadorNoEncontradoError) {
-      return false;
-    }
-    throw error;
+  const solicitante = await prisma.usuario.findUnique({
+    where: { id: solicitanteId },
+  });
+
+  if (!solicitante) {
+    return false;
   }
+
+  const resultado = await resolverAprobadorFinal(solicitante);
+
+  if (resultado.tipo === 'AUTO_APROBACION') {
+    return usuarioId === solicitanteId;
+  }
+
+  if (resultado.tipo !== 'OK') {
+    return false;
+  }
+
+  if (resultado.aprobadorId === usuarioId) {
+    return true;
+  }
+
+  if (!resultado.esRespaldoRRHH) {
+    return false;
+  }
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { id: usuarioId },
+    select: { rol: true, activo: true },
+  });
+
+  return usuario?.rol === Rol.RRHH && usuario.activo;
 }
 
 /**

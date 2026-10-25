@@ -13,6 +13,12 @@ export interface FiltrosAsistencias {
   fechaInicio?: string; // ISO date "YYYY-MM-DD"
   fechaFin?: string;
   jefaturaId?: number;
+  /**
+   * Bloque A: solo aplica a JEFE y DIRECTORA.
+   * - 'propios' → únicamente sus movimientos.
+   * - 'equipo'  → su equipo según jerarquía (valor por defecto del backend).
+   */
+  alcance?: 'propios' | 'equipo';
 }
 
 export interface DatosRegistrarMovimiento {
@@ -70,6 +76,7 @@ export const asistenciaService = {
     if (filtros?.fechaInicio) params.fechaInicio = filtros.fechaInicio;
     if (filtros?.fechaFin) params.fechaFin = filtros.fechaFin;
     if (filtros?.jefaturaId) params.jefaturaId = filtros.jefaturaId;
+    if (filtros?.alcance) params.alcance = filtros.alcance;
     const { data: res } = await api.get<RespuestaListar>('/asistencias', { params });
     return res.movimientos ?? [];
   },

@@ -10,19 +10,50 @@ import { UsuarioAutenticado } from '../middlewares/authJWT';
 
 /**
  * Devuelve los ids de solicitante que el usuario autenticado puede ver,
- * o null si no tiene restricción (ve a todos: ADMIN y RRHH).
+ * o null si no tiene restricción (ve a todos).
  *
- * - JEFE: ve las propias + las de sus subordinados (jefeId === su id).
- * - DIRECTORA: ve las propias + las de todos los usuarios con rol JEFE.
- * - ESPECIALISTA, VIGILANTE: solo las propias.
+ * Bloque A (jerarquía/autorización):
+ * - ADMIN, RRHH, DIRECTORA, VIGILANTE: null → ven todas las papeletas.
+ *   DIRECTORA y VIGILANTE necesitan alcance global por su función (firma
+ *   institucional y control de puerta).
+ * - JEFE: ve las propias + las de sus subordinados directos (jefeId === su id).
+ * - ESPECIALISTA: solo las propias.
  */
 export async function obtenerIdsVisibles(
   usuarioToken: UsuarioAutenticado,
 ): Promise<number[] | null> {
-  if (usuarioToken.rol === Rol.ADMIN || usuarioToken.rol === Rol.RRHH) {
+  if (
+    usuarioToken.rol === Rol.ADMIN ||
+    usuarioToken.rol === Rol.RRHH ||
+    usuarioToken.rol === Rol.DIRECTORA ||
+    usuarioToken.rol === Rol.VIGILANTE
+  ) {
     return null;
   }
 
+  if (usuarioToken.rol === Rol.JEFE) {
+    return obtenerIdsEquipo(usuarioToken);
+  }
+
+  // ESPECIALISTA: solo su propio usuario
+  return [usuarioToken.id];
+}
+
+/**
+ * Alcance organizacional "de equipo" usado por asistencias y visitas:
+ *
+ * - JEFE: su propio id + el de sus subordinados directos.
+ * - DIRECTORA: su propio id + el de todos los jefes.
+ * - Resto de roles: null (sin restricción de equipo; cada controlador decide
+ *   si además limita a "solo lo propio", como ESPECIALISTA).
+ *
+ * Es deliberadamente distinto de `obtenerIdsVisibles`, porque las papeletas
+ * de la Directora y del Vigilante son de alcance global, mientras que sus
+ * vistas de equipo siguen la jerarquía.
+ */
+export async function obtenerIdsEquipo(
+  usuarioToken: UsuarioAutenticado,
+): Promise<number[] | null> {
   if (usuarioToken.rol === Rol.JEFE) {
     const subordinados = await prisma.usuario.findMany({
       where: { jefeId: usuarioToken.id },
@@ -34,15 +65,14 @@ export async function obtenerIdsVisibles(
 
   if (usuarioToken.rol === Rol.DIRECTORA) {
     const jefes = await prisma.usuario.findMany({
-      where: { rol: Rol.JEFE },
+      where: { rol: Rol.JEFE, activo: true },
       select: { id: true },
     });
 
     return [usuarioToken.id, ...jefes.map((u) => u.id)];
   }
 
-  // ESPECIALISTA, VIGILANTE: solo su propio usuario
-  return [usuarioToken.id];
+  return null;
 }
 
 /** Verifica si el usuario autenticado puede ver la papeleta de un solicitante dado. */
@@ -58,4 +88,5 @@ export async function usuarioPuedeVerPapeleta(
 
   return idsVisibles.includes(solicitanteId);
 }
+
 

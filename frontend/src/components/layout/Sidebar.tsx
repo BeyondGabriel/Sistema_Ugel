@@ -12,6 +12,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ShieldCheckIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../hooks/useAuth';
 import type { Rol } from '../../types';
@@ -57,6 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Usuarios', ruta: '/usuarios', Icono: UserGroupIcon, roles: ['ADMIN'] },
       { label: 'Jefaturas', ruta: '/jefaturas', Icono: BuildingOfficeIcon, roles: ['ADMIN'] },
+      { label: 'Delegaciones', ruta: '/delegaciones', Icono: ArrowsRightLeftIcon, roles: ['ADMIN'] },
     ],
   },
 ];

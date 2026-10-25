@@ -10,20 +10,27 @@ import { generarPasswordSegura } from '../src/utils/generarPassword';
 const prisma = new PrismaClient();
 
 async function crearJefaturasIniciales() {
-  const nombresJefaturas = [
-    'Administración',
-    'Recursos Humanos',
-    'Dirección',
-    'Vigilancia',
+  // Bloque A: las cuatro jefaturas oficiales de la UGEL Talara se marcan con
+  // `esOficial = true` para que no puedan eliminarse y para poder distinguirlas
+  // en la interfaz. Las áreas de apoyo (RRHH, Vigilancia, Administración) se
+  // mantienen como no oficiales.
+  const jefaturasSemilla: Array<{ nombre: string; esOficial: boolean }> = [
+    { nombre: 'Dirección', esOficial: true },
+    { nombre: 'Gestión Pedagógica', esOficial: true },
+    { nombre: 'Unidad de Administración', esOficial: true },
+    { nombre: 'UPDI', esOficial: true },
+    { nombre: 'Administración', esOficial: false },
+    { nombre: 'Recursos Humanos', esOficial: false },
+    { nombre: 'Vigilancia', esOficial: false },
   ];
 
   const jefaturas: Record<string, { id: number }> = {};
 
-  for (const nombre of nombresJefaturas) {
+  for (const { nombre, esOficial } of jefaturasSemilla) {
     const jefatura = await prisma.jefatura.upsert({
       where: { nombre },
-      update: {},
-      create: { nombre },
+      update: { esOficial },
+      create: { nombre, esOficial },
     });
     jefaturas[nombre] = jefatura;
   }

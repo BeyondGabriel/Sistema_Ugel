@@ -28,6 +28,11 @@ export interface Jefatura {
   id: number;
   nombre: string;
   descripcion?: string | null;
+  /**
+   * Bloque A: jefaturas oficiales de la UGEL (Dirección, Gestión Pedagógica,
+   * Unidad de Administración, UPDI). No pueden eliminarse.
+   */
+  esOficial: boolean;
 }
 
 export interface UsuarioBasico {
@@ -47,6 +52,10 @@ export interface Usuario extends UsuarioBasico {
   fechaCreacion: string;
   jefatura?: Jefatura | null;
   jefe?: UsuarioBasico | null;
+  /** Bloque A: tratamiento formal usado en documentos oficiales (ej. "Lic."). */
+  tituloFormal?: string | null;
+  /** Bloque A: marcado como P1C / no disponible para aprobar. */
+  noDisponible: boolean;
 }
 
 /** Respuesta del POST /api/auth/login */
@@ -104,6 +113,11 @@ export interface Papeleta {
   anuladoPorAdmin: boolean;
   fechaAnulacion?: string | null;
   // fechaAprobacion eliminado: el backend no devuelve ese campo
+  /**
+   * Bloque A: la papeleta quedó bloqueada porque no se pudo resolver un
+   * aprobador válido. El ADMIN debe reasignarle uno.
+   */
+  requiereAprobadorEspecial: boolean;
   firmaExternaSvg?: string | null;
   fechaCreacion: string;
   solicitante?: UsuarioBasico;
@@ -129,6 +143,29 @@ export interface Notificacion {
   mensaje: string;
   leida: boolean;
   fecha: string;
+}
+
+/**
+ * Bloque A: delegación temporal de la facultad de aprobar papeletas.
+ * Mientras está `vigente`, las papeletas del `titular` se enrutan al
+ * `encargado`.
+ */
+export interface Delegacion {
+  id: number;
+  titularId: number;
+  encargadoId: number;
+  motivo?: string | null;
+  documentoRef?: string | null;
+  fechaInicio: string;
+  fechaFin: string;
+  activo: boolean;
+  /** Calculado por el backend: activa y dentro del rango de fechas. */
+  vigente: boolean;
+  creadoPorId?: number | null;
+  fechaCreacion: string;
+  titular?: UsuarioBasico & { rol: Rol; tituloFormal?: string | null; noDisponible: boolean };
+  encargado?: UsuarioBasico & { rol: Rol; tituloFormal?: string | null; noDisponible: boolean };
+  creadoPor?: UsuarioBasico | null;
 }
 
 /** Error genérico del API */

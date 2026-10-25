@@ -35,7 +35,9 @@ export async function listarJefaturas(_req: Request, res: Response): Promise<voi
 
 /**
  * POST /api/jefaturas
- * Solo Admin. Crea una nueva jefatura.
+ * Solo Admin. Crea una nueva jefatura. Las jefaturas creadas desde la UI
+ * nunca son oficiales: las oficiales (Dirección, Gestión Pedagógica, Unidad
+ * de Administración, UPDI) las siembra el seed y no se pueden eliminar.
  */
 export async function crearJefatura(req: Request, res: Response): Promise<void> {
   try {
@@ -48,7 +50,7 @@ export async function crearJefatura(req: Request, res: Response): Promise<void> 
     }
 
     const jefatura = await prisma.jefatura.create({
-      data: { nombre, descripcion: descripcion ?? null },
+      data: { nombre, descripcion: descripcion ?? null, esOficial: false },
     });
 
     res.status(201).json({ jefatura });
@@ -102,6 +104,15 @@ export async function eliminarJefatura(req: Request, res: Response): Promise<voi
     const jefatura = await prisma.jefatura.findUnique({ where: { id } });
     if (!jefatura) {
       res.status(404).json({ mensaje: 'Jefatura no encontrada' });
+      return;
+    }
+
+    // Bloque A: las jefaturas oficiales son parte de la estructura orgánica
+    // del sistema (seed) y no pueden eliminarse, solo editarse.
+    if (jefatura.esOficial) {
+      res.status(409).json({
+        mensaje: 'No se puede eliminar una jefatura oficial del sistema',
+      });
       return;
     }
 

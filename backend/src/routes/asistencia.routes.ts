@@ -52,6 +52,8 @@ router.put(
   editarMovimiento,
 );
 
+// Bloque A: el JEFE y la DIRECTORA consultan con `alcance=propios|equipo`;
+// el ESPECIALISTA solo puede ver sus propios movimientos.
 router.get(
   '/',
   authJWT,
@@ -63,7 +65,7 @@ router.get(
 router.get(
   '/presencia',
   authJWT,
-  checkRole('VIGILANTE', 'ADMIN', 'RRHH'),
+  checkRole('VIGILANTE', 'ADMIN', 'RRHH', 'JEFE', 'DIRECTORA'),
   validate(obtenerPresenciaQuerySchema, 'query'),
   obtenerPresencia,
 );

@@ -27,6 +27,8 @@ export const visitaService = {
     fechaFin?: string;
     trabajadorVisitadoId?: number;
     registradorId?: number;
+    /** Bloque A: solo JEFE y DIRECTORA — 'propios' o 'equipo'. */
+    alcance?: 'propios' | 'equipo';
   }) {
     const response = await api.get('/visitas', { params: filtros });
     return response.data;

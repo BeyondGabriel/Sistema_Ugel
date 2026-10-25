@@ -62,3 +62,28 @@ export function emitirCambioPapeleta(
     io.to(`usuario:${id}`).emit('papeleta:cambio', { papeletaId, estado });
   }
 }
+
+/** Sala compartida por todos los usuarios con rol ADMIN conectados. */
+export const SALA_ADMIN = 'admin';
+
+/**
+ * Avisa en tiempo real a los administradores de que una papeleta quedó
+ * bloqueada (no se pudo resolver un aprobador válido). El payload incluye
+ * el código de bloqueo para que el dashboard muestre el motivo sin tener
+ * que consultar el detalle.
+ */
+export function emitirPapeletaBloqueada(payload: {
+  papeletaId: number;
+  numero: string;
+  codigo: string;
+  mensaje: string;
+  solicitanteId: number;
+}): void {
+  const io = getIO();
+  if (!io) {
+    return;
+  }
+
+  io.to(SALA_ADMIN).emit('papeleta:bloqueada', payload);
+}
+

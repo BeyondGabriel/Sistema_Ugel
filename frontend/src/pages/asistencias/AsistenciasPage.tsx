@@ -93,11 +93,17 @@ export function AsistenciasPage() {
 
   // Redirige a /mis-asistencias si no tiene permiso para ver todos
   useEffect(() => {
-    const rolesConAcceso = ['VIGILANTE', 'ADMIN', 'RRHH'];
+    const rolesConAcceso = ['VIGILANTE', 'ADMIN', 'RRHH', 'JEFE', 'DIRECTORA'];
     if (user && !rolesConAcceso.includes(user.rol)) {
       navigate('/mis-asistencias', { replace: true });
     }
   }, [user, navigate]);
+
+  // Bloque A: el JEFE y la DIRECTORA alternan entre su equipo y sus propios
+  // registros mediante el parámetro `alcance`.
+  const esJefeODirectora = user?.rol === 'JEFE' || user?.rol === 'DIRECTORA';
+  // GET /usuarios solo está disponible para ADMIN, RRHH y VIGILANTE.
+  const puedeListarUsuarios = ['ADMIN', 'RRHH', 'VIGILANTE'].includes(user?.rol ?? '');
 
   const [filas, setFilas] = useState<FilaDia[]>([]);
   const [cargando, setCargando] = useState(false);
@@ -108,20 +114,25 @@ export function AsistenciasPage() {
   const [fechaFin, setFechaFin] = useState(fechaHoyLocal());
   const [usuarioFiltro, setUsuarioFiltro] = useState<number | ''>('');
   const [jefaturaFiltro, setJefaturaFiltro] = useState<number | ''>('');
+  const [alcance, setAlcance] = useState<'propios' | 'equipo'>('equipo');
 
   // Datos auxiliares para los selects
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [jefaturas, setJefaturas] = useState<Jefatura[]>([]);
 
   useEffect(() => {
-    Promise.all([
-      adminService.listarUsuarios({ activo: true }),
-      adminService.listarJefaturas(),
-    ]).then(([u, j]) => {
-      setUsuarios(u);
-      setJefaturas(j);
-    });
-  }, []);
+    adminService
+      .listarJefaturas()
+      .then(setJefaturas)
+      .catch(() => setJefaturas([]));
+
+    if (puedeListarUsuarios) {
+      adminService
+        .listarUsuarios({ activo: true })
+        .then(setUsuarios)
+        .catch(() => setUsuarios([]));
+    }
+  }, [puedeListarUsuarios]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -131,6 +142,7 @@ export function AsistenciasPage() {
         fechaFin,
         usuarioId: usuarioFiltro || undefined,
         jefaturaId: jefaturaFiltro || undefined,
+        ...(esJefeODirectora ? { alcance } : {}),
       });
       setFilas(agruparPorDia(movs));
     } catch {
@@ -138,7 +150,15 @@ export function AsistenciasPage() {
     } finally {
       setCargando(false);
     }
-  }, [fechaInicio, fechaFin, usuarioFiltro, jefaturaFiltro, mostrar]);
+  }, [
+    fechaInicio,
+    fechaFin,
+    usuarioFiltro,
+    jefaturaFiltro,
+    esJefeODirectora,
+    alcance,
+    mostrar,
+  ]);
 
   useEffect(() => {
     cargar();
@@ -179,20 +199,46 @@ export function AsistenciasPage() {
               <Button variant="secondary" size="sm">Registrar asistencia</Button>
             </Link>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={exportando}
-            onClick={exportar}
-          >
-            <ArrowDownTrayIcon className="h-4 w-4" /> Exportar Excel
-          </Button>
+          {puedeListarUsuarios && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={exportando}
+              onClick={exportar}
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" /> Exportar Excel
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
         <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+        {esJefeODirectora && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Alcance</span>
+            <div className="inline-flex overflow-hidden rounded-lg border border-gray-600">
+              {([
+                { valor: 'equipo', label: 'Mis subordinados' },
+                { valor: 'propios', label: 'Solo mis registros' },
+              ] as const).map((opcion) => (
+                <button
+                  key={opcion.valor}
+                  type="button"
+                  onClick={() => setAlcance(opcion.valor)}
+                  className={`px-3 py-1.5 text-sm transition-colors ${
+                    alcance === opcion.valor
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  {opcion.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-gray-500">Desde</span>
           <input
@@ -211,23 +257,25 @@ export function AsistenciasPage() {
             className={SELECT_CLS}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Trabajador</span>
-          <select
-            value={usuarioFiltro}
-            onChange={(e) =>
-              setUsuarioFiltro(e.target.value ? Number(e.target.value) : '')
-            }
-            className={SELECT_CLS}
-          >
-            <option value="">Todos</option>
-            {usuarios.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nombres} {u.apellidos}
-              </option>
-            ))}
-          </select>
-        </div>
+        {puedeListarUsuarios && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-gray-500">Trabajador</span>
+            <select
+              value={usuarioFiltro}
+              onChange={(e) =>
+                setUsuarioFiltro(e.target.value ? Number(e.target.value) : '')
+              }
+              className={SELECT_CLS}
+            >
+              <option value="">Todos</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nombres} {u.apellidos}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-gray-500">Jefatura</span>
           <select

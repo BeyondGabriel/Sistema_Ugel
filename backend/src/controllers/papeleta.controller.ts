@@ -9,8 +9,7 @@ import prisma from '../utils/prisma';
 import {
   generarNumeroPapeleta,
   generarTokenUnico,
-  determinarAprobador,
-  AprobadorNoEncontradoError,
+  resolverAprobadorFinal,
   aplicarBloqueos,
   revertirSiExpiro,
   esAprobadorVigente,
@@ -23,16 +22,22 @@ import {
   papeletaSchema,
   rechazarPapeletaSchema,
   observarPapeletaSchema,
+  desbloquearPapeletaSchema,
   papeletaIdParamsSchema,
   listarPapeletasQuerySchema,
 } from '../schemas/papeleta.schema';
-import { emitirCambioPapeleta } from '../sockets/io';
+import { emitirCambioPapeleta, emitirPapeletaBloqueada } from '../sockets/io';
 
 /**
  * POST /api/papeletas
  * Roles: ESPECIALISTA, JEFE, VIGILANTE, RRHH, ADMIN, DIRECTORA.
- * Crea una papeleta, calcula su número anual, determina el aprobador
- * según la jerarquía y, si el solicitante es Directora, la auto-aprueba.
+ * Crea una papeleta, calcula su número anual y resuelve la cadena de
+ * aprobación (jerarquía del rol + delegación vigente):
+ * - Directora → se auto-aprueba y recibe token.
+ * - Aprobador disponible → se le asigna la papeleta (PENDIENTE).
+ * - Sin aprobador válido (jerarquía incompleta o titular P1C sin delegación)
+ *   → la papeleta se crea igualmente marcada con `requiereAprobadorEspecial`
+ *     y se avisa al Administrador (respuesta 201 con `bloqueo`).
  */
 export async function crearPapeleta(
   req: Request,
@@ -49,22 +54,24 @@ export async function crearPapeleta(
     // Los datos ya llegan validados y normalizados (Date) por papeletaSchema.
     const campos = req.body as z.infer<typeof papeletaSchema>;
 
-    let aprobadorId: number | null;
+    const solicitante = await prisma.usuario.findUnique({
+      where: { id: usuarioToken.id },
+    });
 
-    try {
-      aprobadorId = await determinarAprobador(usuarioToken.id);
-    } catch (error) {
-      if (error instanceof AprobadorNoEncontradoError) {
-        res.status(400).json({
-          mensaje: 'No hay un aprobador disponible para su rol',
-        });
-        return;
-      }
-
-      throw error;
+    if (!solicitante) {
+      res.status(401).json({ mensaje: 'No autenticado' });
+      return;
     }
 
-    const esAutoAprobada = usuarioToken.rol === Rol.DIRECTORA;
+    // Bloque A: jerarquía + delegación. Nunca lanza por falta de aprobador.
+    const resolucion = await resolverAprobadorFinal(solicitante);
+
+    const esAutoAprobada = resolucion.tipo === 'AUTO_APROBACION';
+    const estaBloqueada =
+      resolucion.tipo === 'BLOQUEO_P1C' ||
+      resolucion.tipo === 'BLOQUEO_SIN_APROBADOR';
+    const aprobadorId = resolucion.tipo === 'OK' ? resolucion.aprobadorId : null;
+
     const año = campos.fechaInicio.getFullYear();
 
     const nuevaPapeleta = await prisma.$transaction(async (tx) => {
@@ -82,6 +89,7 @@ export async function crearPapeleta(
         estado: esAutoAprobada
           ? EstadoPapeleta.APROBADO
           : EstadoPapeleta.PENDIENTE,
+        requiereAprobadorEspecial: estaBloqueada,
         solicitante: { connect: { id: usuarioToken.id } },
       };
 
@@ -102,6 +110,39 @@ export async function crearPapeleta(
       nuevaPapeleta.id,
       nuevaPapeleta.estado
     );
+
+    // Bloque A: papeleta bloqueada → aviso inmediato a los administradores
+    // por la sala `admin` y notificación persistente en su bandeja.
+    if (resolucion.tipo === 'BLOQUEO_P1C' || resolucion.tipo === 'BLOQUEO_SIN_APROBADOR') {
+      const codigo = resolucion.tipo;
+      const mensaje = resolucion.mensaje;
+
+      emitirPapeletaBloqueada({
+        papeletaId: nuevaPapeleta.id,
+        numero: nuevaPapeleta.numero,
+        codigo,
+        mensaje,
+        solicitanteId: nuevaPapeleta.solicitanteId,
+      });
+
+      const administradores = await prisma.usuario.findMany({
+        where: { rol: Rol.ADMIN, activo: true },
+        select: { id: true },
+      });
+
+      for (const admin of administradores) {
+        notificar(
+          admin.id,
+          `Papeleta ${nuevaPapeleta.numero} bloqueada (${codigo}). El aprobador no está disponible o no tiene delegación vigente; asigne un aprobador.`
+        );
+      }
+
+      res.status(201).json({
+        papeleta: nuevaPapeleta,
+        bloqueo: { codigo, mensaje },
+      });
+      return;
+    }
 
     res.status(201).json({ papeleta: nuevaPapeleta });
   } catch (error) {
@@ -772,5 +813,102 @@ export async function reenviarPapeleta(
     res.status(500).json({
       mensaje: 'Error interno del servidor',
     });
+  }
+}
+
+/** Roles que pueden quedar como aprobador de una papeleta. */
+const ROLES_APROBADORES: Rol[] = [Rol.JEFE, Rol.DIRECTORA, Rol.RRHH, Rol.ADMIN];
+
+/**
+ * PUT /api/papeletas/:id/desbloquear
+ * Solo Admin. Reasigna el aprobador de una papeleta que quedó bloqueada
+ * (`requiereAprobadorEspecial = true`, sin aprobador) porque la jerarquía no
+ * permitía resolverlo o el titular estaba P1C sin delegación vigente.
+ *
+ * Deja la papeleta en PENDIENTE con el aprobador indicado y notifica tanto al
+ * solicitante como al nuevo aprobador.
+ */
+export async function desbloquearPapeleta(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const { id } = req.params as unknown as z.infer<typeof papeletaIdParamsSchema>;
+    const { aprobadorId, comentario } = req.body as z.infer<
+      typeof desbloquearPapeletaSchema
+    >;
+
+    const papeleta = await prisma.papeleta.findUnique({ where: { id } });
+
+    if (!papeleta) {
+      res.status(404).json({ mensaje: 'Papeleta no encontrada' });
+      return;
+    }
+
+    if (!papeleta.requiereAprobadorEspecial && papeleta.aprobadorId !== null) {
+      res.status(409).json({
+        mensaje: 'La papeleta no está bloqueada: ya tiene un aprobador asignado',
+      });
+      return;
+    }
+
+    if (papeleta.estado !== EstadoPapeleta.PENDIENTE) {
+      res.status(409).json({
+        mensaje: `Solo se pueden desbloquear papeletas en estado PENDIENTE (estado actual: ${papeleta.estado})`,
+      });
+      return;
+    }
+
+    if (aprobadorId === papeleta.solicitanteId) {
+      res.status(400).json({
+        mensaje: 'El aprobador no puede ser el propio solicitante de la papeleta',
+      });
+      return;
+    }
+
+    const aprobador = await prisma.usuario.findUnique({ where: { id: aprobadorId } });
+
+    if (!aprobador || !aprobador.activo) {
+      res.status(404).json({ mensaje: 'El aprobador indicado no existe o está inactivo' });
+      return;
+    }
+
+    if (!ROLES_APROBADORES.includes(aprobador.rol)) {
+      res.status(400).json({
+        mensaje: 'El aprobador indicado no tiene un rol habilitado para aprobar papeletas',
+      });
+      return;
+    }
+
+    const papeletaActualizada = await prisma.papeleta.update({
+      where: { id },
+      data: {
+        aprobadorId,
+        requiereAprobadorEspecial: false,
+      },
+    });
+
+    emitirCambioPapeleta(
+      destinatariosCambioPapeleta(papeletaActualizada),
+      papeletaActualizada.id,
+      papeletaActualizada.estado
+    );
+
+    notificar(
+      papeletaActualizada.solicitanteId,
+      `Su papeleta ${papeletaActualizada.numero} fue desbloqueada por el Administrador y asignada a ${aprobador.nombres} ${aprobador.apellidos}.`
+    );
+
+    notificar(
+      aprobadorId,
+      `Se le asignó la papeleta ${papeletaActualizada.numero} (desbloqueo administrativo)${
+        comentario ? `: ${comentario}` : '.'
+      }`
+    );
+
+    res.status(200).json({ papeleta: papeletaActualizada });
+  } catch (error) {
+    console.error('Error en desbloquearPapeleta:', error);
+    res.status(500).json({ mensaje: 'Error interno del servidor' });
   }
 }

@@ -14,6 +14,7 @@ import {
   observarPapeleta,
   cancelarPapeleta,
   reenviarPapeleta,
+  desbloquearPapeleta,
 } from '../controllers/papeleta.controller';
 
 import {
@@ -35,6 +36,7 @@ import {
   papeletaSchema,
   rechazarPapeletaSchema,
   observarPapeletaSchema,
+  desbloquearPapeletaSchema,
   anularPapeletaSchema,
   verificarTokenSchema,
   papeletaIdParamsSchema,
@@ -98,6 +100,7 @@ router.get(
 router.put(
   '/:id/revisar',
   authJWT,
+  checkRole('ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'),
   validate(papeletaIdParamsSchema, 'params'),
   iniciarRevision,
 );
@@ -105,6 +108,7 @@ router.put(
 router.put(
   '/:id/aprobar',
   authJWT,
+  checkRole('ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'),
   validate(papeletaIdParamsSchema, 'params'),
   aprobarPapeleta,
 );
@@ -112,6 +116,7 @@ router.put(
 router.put(
   '/:id/rechazar',
   authJWT,
+  checkRole('ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'),
   validate(papeletaIdParamsSchema, 'params'),
   validate(rechazarPapeletaSchema, 'body'),
   rechazarPapeleta,
@@ -120,9 +125,20 @@ router.put(
 router.put(
   '/:id/observar',
   authJWT,
+  checkRole('ADMIN', 'RRHH', 'DIRECTORA', 'JEFE'),
   validate(papeletaIdParamsSchema, 'params'),
   validate(observarPapeletaSchema, 'body'),
   observarPapeleta,
+);
+
+// Bloque A: el ADMIN reasigna el aprobador de una papeleta bloqueada.
+router.put(
+  '/:id/desbloquear',
+  authJWT,
+  checkRole('ADMIN'),
+  validate(papeletaIdParamsSchema, 'params'),
+  validate(desbloquearPapeletaSchema, 'body'),
+  desbloquearPapeleta,
 );
 
 router.put(
