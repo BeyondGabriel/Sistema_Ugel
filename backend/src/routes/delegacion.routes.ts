@@ -23,11 +23,13 @@ import {
 
 const router = Router();
 
-// Todo el módulo es exclusivo del Administrador del sistema.
+// El listado lo consultan el Administrador y los titulares/encargados
+// (JEFE y DIRECTORA) para ver sus propias delegaciones en el dashboard.
+// La creación y anulación siguen siendo exclusivas del Administrador.
 router.get(
   '/',
   authJWT,
-  checkRole('ADMIN'),
+  checkRole('ADMIN', 'JEFE', 'DIRECTORA'),
   validate(listarDelegacionesQuerySchema, 'query'),
   listarDelegaciones,
 );

@@ -8,7 +8,7 @@
 
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { Rol } from '@prisma/client';
+import { Prisma, Rol } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { notificar } from '../services/notificacion.service';
 import {
@@ -69,7 +69,8 @@ const incluirRelaciones = {
 
 /**
  * GET /api/delegaciones
- * Solo Admin. Lista delegaciones con datos de titular, encargado y creador.
+ * ADMIN ve todas; JEFE y DIRECTORA solo las propias (como titular o
+ * encargado). Lista delegaciones con datos de titular, encargado y creador.
  * `soloVigentes=true` limita a las activas y dentro de su rango de fechas.
  */
 export async function listarDelegaciones(req: Request, res: Response): Promise<void> {
@@ -79,18 +80,31 @@ export async function listarDelegaciones(req: Request, res: Response): Promise<v
 
     const ahora = new Date();
 
+    const where: Prisma.DelegacionWhereInput = {
+      ...(soloVigentes === 'true'
+        ? {
+            activo: true,
+            fechaInicio: { lte: ahora },
+            fechaFin: { gte: ahora },
+          }
+        : {}),
+    };
+
+    // Los roles no administradores solo pueden ver las delegaciones en las
+    // que participan. Se ignoran los filtros titularId/encargadoId recibidos
+    // por query string para evitar que consulten delegaciones de terceros.
+    if (req.usuario && req.usuario.rol !== Rol.ADMIN) {
+      where.OR = [
+        { titularId: req.usuario.id },
+        { encargadoId: req.usuario.id },
+      ];
+    } else {
+      if (titularId !== undefined) where.titularId = titularId;
+      if (encargadoId !== undefined) where.encargadoId = encargadoId;
+    }
+
     const delegaciones = await prisma.delegacion.findMany({
-      where: {
-        ...(titularId !== undefined ? { titularId } : {}),
-        ...(encargadoId !== undefined ? { encargadoId } : {}),
-        ...(soloVigentes === 'true'
-          ? {
-              activo: true,
-              fechaInicio: { lte: ahora },
-              fechaFin: { gte: ahora },
-            }
-          : {}),
-      },
+      where,
       include: incluirRelaciones,
       orderBy: [{ activo: 'desc' }, { fechaInicio: 'desc' }],
     });
