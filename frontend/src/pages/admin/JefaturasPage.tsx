@@ -126,24 +126,24 @@ export function JefaturasPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8 text-content-primary">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Jefaturas</h1>
-          <p className="text-sm text-gray-400">{jefaturas.length} jefatura(s)</p>
+          <h1 className="text-xl font-bold text-content-primary">Jefaturas</h1>
+          <p className="text-sm text-content-secondary">{jefaturas.length} jefatura(s)</p>
         </div>
         {esAdmin && (
-          <Button variant="primary" size="sm" onClick={abrirModalCrear}>
+          <Button variant="primary" size="sm" theme="light" onClick={abrirModalCrear}>
             <PlusIcon className="h-4 w-4" /> Nueva jefatura
           </Button>
         )}
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-gray-700">
+      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-800 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
               <th className="px-4 py-3 text-left">Descripción</th>
@@ -151,29 +151,29 @@ export function JefaturasPage() {
               {esAdmin && <th className="px-4 py-3 text-right">Acciones</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700 bg-gray-900">
+          <tbody className="divide-y divide-line-light bg-surface-card">
             {cargando ? (
               <tr>
-                <td colSpan={esAdmin ? 4 : 3} className="px-4 py-8 text-center text-gray-500">
-                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                <td colSpan={esAdmin ? 4 : 3} className="px-4 py-8 text-center text-content-tertiary">
+                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
                 </td>
               </tr>
             ) : jefaturas.length === 0 ? (
               <tr>
-                <td colSpan={esAdmin ? 4 : 3} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={esAdmin ? 4 : 3} className="px-4 py-8 text-center text-content-tertiary">
                   No hay jefaturas registradas
                 </td>
               </tr>
             ) : (
               jefaturas.map((j) => (
-                <tr key={j.id} className="hover:bg-gray-800/60 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-100">
+                <tr key={j.id} className="hover:bg-surface-bg transition-colors">
+                  <td className="px-4 py-3 font-medium text-content-primary">
                     <div className="flex items-center gap-2">
-                      <BuildingOfficeIcon className="h-4 w-4 text-gray-500" />
+                      <BuildingOfficeIcon className="h-4 w-4 text-content-tertiary" />
                       {j.nombre}
                       {j.esOficial && (
                         <span
-                          className="rounded-full bg-emerald-900/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400"
+                          className="badge-info text-[10px] font-semibold uppercase tracking-wide"
                           title="Jefatura oficial de la UGEL: no puede eliminarse"
                         >
                           Oficial
@@ -181,14 +181,14 @@ export function JefaturasPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-400">{j.descripcion ?? '—'}</td>
-                  <td className="px-4 py-3 text-center text-gray-400">
+                  <td className="px-4 py-3 text-content-secondary">{j.descripcion ?? '—'}</td>
+                  <td className="px-4 py-3 text-center text-content-secondary">
                     {(j as any)._count?.usuarios ?? '—'}
                   </td>
                   {esAdmin && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => abrirModalEditar(j)}>
+                        <Button variant="ghost" size="sm" theme="light" onClick={() => abrirModalEditar(j)}>
                           <PencilIcon className="h-4 w-4" /> Editar
                         </Button>
                         {/* Las jefaturas oficiales (Dirección, Gestión Pedagógica,
@@ -197,6 +197,7 @@ export function JefaturasPage() {
                           <Button
                             variant="danger"
                             size="sm"
+                            theme="light"
                             onClick={() => setModalEliminar({ abierto: true, jefatura: j, eliminando: false })}
                           >
                             <TrashIcon className="h-4 w-4" /> Eliminar
@@ -220,30 +221,30 @@ export function JefaturasPage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-content-primary mb-1">Nombre</label>
             <input
               type="text"
               value={modalForm.nombre}
               onChange={(e) => setModalForm((prev) => ({ ...prev, nombre: e.target.value }))}
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="input-field"
               placeholder="Nombre de la jefatura"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
+            <label className="block text-sm font-medium text-content-primary mb-1">Descripción</label>
             <textarea
               value={modalForm.descripcion}
               onChange={(e) => setModalForm((prev) => ({ ...prev, descripcion: e.target.value }))}
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="input-field"
               placeholder="Descripción (opcional)"
               rows={2}
             />
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="ghost" onClick={cerrarModalForm} disabled={modalForm.guardando}>
+            <Button variant="ghost" theme="light" onClick={cerrarModalForm} disabled={modalForm.guardando}>
               Cancelar
             </Button>
-            <Button variant="primary" onClick={guardarJefatura} disabled={modalForm.guardando || !modalForm.nombre.trim()}>
+            <Button variant="primary" theme="light" onClick={guardarJefatura} disabled={modalForm.guardando || !modalForm.nombre.trim()}>
               {modalForm.guardando ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>
@@ -256,20 +257,21 @@ export function JefaturasPage() {
         onClose={() => !modalEliminar.eliminando && setModalEliminar({ abierto: false, jefatura: null, eliminando: false })}
         title="Eliminar jefatura"
       >
-        <p className="text-sm text-gray-300">
+        <p className="text-sm text-content-secondary">
           ¿Estás seguro de que deseas eliminar la jefatura{' '}
-          <span className="font-semibold text-gray-100">{modalEliminar.jefatura?.nombre}</span>?
+          <span className="font-semibold text-content-primary">{modalEliminar.jefatura?.nombre}</span>?
           Esta acción no se puede deshacer.
         </p>
         <div className="mt-5 flex justify-end gap-3">
           <Button
             variant="ghost"
+            theme="light"
             onClick={() => setModalEliminar({ abierto: false, jefatura: null, eliminando: false })}
             disabled={modalEliminar.eliminando}
           >
             Cancelar
           </Button>
-          <Button variant="danger" onClick={confirmarEliminar} disabled={modalEliminar.eliminando}>
+          <Button variant="danger" theme="light" onClick={confirmarEliminar} disabled={modalEliminar.eliminando}>
             {modalEliminar.eliminando ? 'Eliminando...' : 'Eliminar'}
           </Button>
         </div>

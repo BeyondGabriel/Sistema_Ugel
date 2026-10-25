@@ -69,80 +69,83 @@ export function NotificacionesPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5">
-      {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <BellIcon className="h-6 w-6 text-emerald-400" />
-          <div>
-            <h1 className="text-xl font-bold text-gray-100">Notificaciones</h1>
-            <p className="text-sm text-gray-400">
-              {noLeidas > 0 ? `${noLeidas} sin leer` : 'Todo al día'}
-            </p>
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8">
+      <div className="max-w-2xl space-y-5">
+        {/* Encabezado */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <BellIcon className="h-6 w-6 text-brand-blue" />
+            <div>
+              <h1 className="text-xl font-bold text-content-primary">Notificaciones</h1>
+              <p className="text-sm text-content-secondary">
+                {noLeidas > 0 ? `${noLeidas} sin leer` : 'Todo al día'}
+              </p>
+            </div>
           </div>
+          {noLeidas > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              theme="light"
+              disabled={marcandoTodas}
+              onClick={marcarTodas}
+            >
+              <CheckIcon className="h-4 w-4" /> Marcar todas como leídas
+            </Button>
+          )}
         </div>
-        {noLeidas > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={marcandoTodas}
-            onClick={marcarTodas}
-          >
-            <CheckIcon className="h-4 w-4" /> Marcar todas como leídas
-          </Button>
+
+        {/* Lista */}
+        {cargando ? (
+          <div className="flex justify-center py-16">
+            <span className="h-7 w-7 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
+          </div>
+        ) : notificaciones.length === 0 ? (
+          <div className="rounded-ds-lg border border-line-light bg-surface-card py-14 text-center shadow-card">
+            <BellIcon className="mx-auto mb-3 h-10 w-10 text-content-tertiary" />
+            <p className="text-sm text-content-tertiary">No tienes notificaciones aún</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-line-light overflow-hidden rounded-ds-lg border border-line-light bg-surface-card shadow-card">
+            {notificaciones.map((n) => (
+              <div
+                key={n.id}
+                className={[
+                  'flex items-start gap-4 px-5 py-4 transition-colors',
+                  n.leida ? 'bg-surface-bg opacity-80' : 'bg-surface-card',
+                ].join(' ')}
+              >
+                {/* Indicador */}
+                <div className="mt-0.5 shrink-0">
+                  {n.leida
+                    ? <CheckCircleIcon className="h-5 w-5 text-content-tertiary" />
+                    : <span className="mt-1 block h-2.5 w-2.5 rounded-full bg-brand-blue" />
+                  }
+                </div>
+
+                {/* Contenido */}
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm leading-snug ${n.leida ? 'text-content-secondary' : 'text-content-primary'}`}>
+                    {n.mensaje}
+                  </p>
+                  <p className="mt-1 text-xs text-content-tertiary">{formatFechaHora(n.fecha)}</p>
+                </div>
+
+                {/* Acción */}
+                {!n.leida && (
+                  <button
+                    onClick={() => marcarLeida(n.id)}
+                    disabled={marcandoId === n.id}
+                    className="shrink-0 text-xs font-medium text-brand-blue transition-colors hover:text-brand-blue-hover disabled:opacity-50"
+                  >
+                    {marcandoId === n.id ? '…' : 'Leída'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
-
-      {/* Lista */}
-      {cargando ? (
-        <div className="flex justify-center py-16">
-          <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-        </div>
-      ) : notificaciones.length === 0 ? (
-        <div className="rounded-xl border border-gray-700 bg-gray-800 py-14 text-center">
-          <BellIcon className="h-10 w-10 text-gray-600 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">No tienes notificaciones aún</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-gray-700 rounded-xl border border-gray-700 overflow-hidden">
-          {notificaciones.map((n) => (
-            <div
-              key={n.id}
-              className={[
-                'flex items-start gap-4 px-5 py-4 transition-colors',
-                n.leida ? 'bg-gray-900 opacity-70' : 'bg-gray-800',
-              ].join(' ')}
-            >
-              {/* Indicador */}
-              <div className="mt-0.5 shrink-0">
-                {n.leida
-                  ? <CheckCircleIcon className="h-5 w-5 text-gray-600" />
-                  : <span className="block h-2.5 w-2.5 rounded-full bg-emerald-400 mt-1" />
-                }
-              </div>
-
-              {/* Contenido */}
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm leading-snug ${n.leida ? 'text-gray-400' : 'text-gray-100'}`}>
-                  {n.mensaje}
-                </p>
-                <p className="mt-1 text-xs text-gray-600">{formatFechaHora(n.fecha)}</p>
-              </div>
-
-              {/* Acción */}
-              {!n.leida && (
-                <button
-                  onClick={() => marcarLeida(n.id)}
-                  disabled={marcandoId === n.id}
-                  className="shrink-0 text-xs text-emerald-400 hover:text-emerald-300 transition-colors disabled:opacity-50"
-                >
-                  {marcandoId === n.id ? '…' : 'Leída'}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
