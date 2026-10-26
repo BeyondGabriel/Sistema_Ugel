@@ -21,8 +21,6 @@ function formatHora(ts: string): string {
   });
 }
 
-const INPUT_CLS = 'rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-
 export function VisitasPage() {
   const { user } = useAuth();
   const { mostrar } = useToast();
@@ -113,19 +111,19 @@ export function VisitasPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Visitas</h1>
-          <p className="text-sm text-gray-400">{visitas.length} registro(s)</p>
+          <h1 className="text-xl font-bold text-content-primary">Visitas</h1>
+          <p className="text-sm text-content-secondary">{visitas.length} registro(s)</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" disabled={exportando} onClick={exportar}>
+          <Button theme="light" variant="ghost" size="sm" disabled={exportando} onClick={exportar}>
             <ArrowDownTrayIcon className="h-4 w-4" /> Excel
           </Button>
           {puedeAccionar && (
             <Link to="/visitas/registro">
-              <Button variant="primary" size="sm">
+              <Button theme="light" variant="primary" size="sm">
                 <PlusIcon className="h-4 w-4" /> Registrar visita
               </Button>
             </Link>
@@ -134,12 +132,12 @@ export function VisitasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
-        <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+        <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         {esJefeODirectora && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Alcance</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-gray-600">
+            <span className="text-xs text-content-secondary">Alcance</span>
+            <div className="inline-flex overflow-hidden rounded-ds-lg border border-line-light">
               {([
                 { valor: 'equipo', label: 'Mis subordinados' },
                 { valor: 'propios', label: 'Solo mis registros' },
@@ -150,8 +148,8 @@ export function VisitasPage() {
                   onClick={() => setAlcance(opcion.valor)}
                   className={`px-3 py-1.5 text-sm transition-colors ${
                     alcance === opcion.valor
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      ? 'bg-brand-blue text-content-inverse'
+                      : 'bg-surface-card text-content-secondary hover:bg-surface-bg'
                   }`}
                 >
                   {opcion.label}
@@ -161,17 +159,17 @@ export function VisitasPage() {
           </div>
         )}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Desde</span>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Desde</span>
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field sm:w-auto" />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Hasta</span>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Hasta</span>
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field sm:w-auto" />
         </div>
         {puedeListarUsuarios && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Trabajador visitado</span>
-            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value ? Number(e.target.value) : '')} className={INPUT_CLS}>
+            <span className="text-xs text-content-secondary">Trabajador visitado</span>
+            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value ? Number(e.target.value) : '')} className="input-field sm:w-auto">
               <option value="">Todos</option>
               {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombres} {u.apellidos}</option>)}
             </select>
@@ -180,9 +178,9 @@ export function VisitasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-gray-700">
+      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-800 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Visitante</th>
               <th className="px-4 py-3 text-left">DNI</th>
@@ -193,34 +191,34 @@ export function VisitasPage() {
               {puedeAccionar && <th className="px-4 py-3 text-right">Acciones</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700 bg-gray-900">
+          <tbody className="bg-surface-card divide-y divide-line-light">
             {cargando ? (
-              <tr><td colSpan={puedeAccionar ? 7 : 6} className="py-10 text-center">
-                <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+              <tr><td colSpan={puedeAccionar ? 7 : 6} className="px-4 py-10 text-center">
+                <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
               </td></tr>
             ) : visitas.length === 0 ? (
-              <tr><td colSpan={puedeAccionar ? 7 : 6} className="py-10 text-center text-gray-500">Sin registros</td></tr>
+              <tr><td colSpan={puedeAccionar ? 7 : 6} className="px-4 py-10 text-center text-content-tertiary">Sin registros</td></tr>
             ) : (
               visitas.map((v) => (
-                <tr key={v.id} className="hover:bg-gray-800/60 transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-gray-100 whitespace-nowrap">{v.visitanteNombre}</td>
-                  <td className="px-4 py-2.5 text-gray-400">{v.visitanteDni}</td>
-                  <td className="px-4 py-2.5 text-gray-200 whitespace-nowrap">
+                <tr key={v.id} className="hover:bg-surface-bg transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-content-primary whitespace-nowrap">{v.visitanteNombre}</td>
+                  <td className="px-4 py-2.5 text-content-secondary">{v.visitanteDni}</td>
+                  <td className="px-4 py-2.5 text-content-primary whitespace-nowrap">
                     {v.trabajadorVisitado ? `${v.trabajadorVisitado.nombres} ${v.trabajadorVisitado.apellidos}` : `#${v.trabajadorVisitadoId}`}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-400">{v.trabajadorVisitado?.jefatura?.nombre ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-gray-300 whitespace-nowrap">{formatHora(v.horaEntrada)}</td>
+                  <td className="px-4 py-2.5 text-content-secondary">{v.trabajadorVisitado?.jefatura?.nombre ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">{formatHora(v.horaEntrada)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     {v.horaSalida
-                      ? <span className="text-gray-300">{formatHora(v.horaSalida)}</span>
-                      : <span className="text-xs text-amber-400">Aún en sede</span>
+                      ? <span className="text-content-secondary">{formatHora(v.horaSalida)}</span>
+                      : <span className="badge-warning">Aún en sede</span>
                     }
                   </td>
                   {puedeAccionar && (
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
                         {!v.horaSalida && (
-                          <Button variant="secondary" size="sm" disabled={accionId === v.id} onClick={() => registrarSalida(v.id)}>
+                          <Button theme="light" variant="secondary" size="sm" disabled={accionId === v.id} onClick={() => registrarSalida(v.id)}>
                             Salida
                           </Button>
                         )}

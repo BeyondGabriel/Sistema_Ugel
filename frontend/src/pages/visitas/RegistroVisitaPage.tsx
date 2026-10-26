@@ -87,23 +87,24 @@ export function RegistroVisitaPage() {
   }
 
   return (
-    <div className="max-w-lg space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/visitas')}>
+        <Button theme="light" variant="ghost" size="sm" onClick={() => navigate('/visitas')}>
           <ArrowLeftIcon className="h-4 w-4" /> Volver
         </Button>
         <div className="flex items-center gap-2">
-          <UserGroupIcon className="h-5 w-5 text-violet-400" />
-          <h1 className="text-xl font-bold text-gray-100">Registrar visita</h1>
+          <UserGroupIcon className="h-5 w-5 text-brand-blue" />
+          <h1 className="text-xl font-bold text-content-primary">Registrar visita</h1>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <Card>
+      <form onSubmit={handleSubmit} className="max-w-2xl">
+        <Card theme="light">
           <div className="space-y-4">
             {/* Datos del visitante */}
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Datos del visitante</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary">Datos del visitante</p>
             <Input
+              theme="light"
               label="Nombre completo *"
               value={visitanteNombre}
               onChange={(e) => { setVisitanteNombre(e.target.value); setErrores((p) => ({ ...p, nombre: '' })); }}
@@ -111,6 +112,7 @@ export function RegistroVisitaPage() {
               placeholder="Juan García López"
             />
             <Input
+              theme="light"
               label="DNI *"
               value={visitanteDni}
               onChange={(e) => { setVisitanteDni(e.target.value.replace(/\D/g, '')); setErrores((p) => ({ ...p, dni: '' })); }}
@@ -120,20 +122,21 @@ export function RegistroVisitaPage() {
             />
 
             {/* Trabajador a visitar */}
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 pt-2">Trabajador a visitar</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-content-secondary pt-2">Trabajador a visitar</p>
             <Input
+              theme="light"
               label="Buscar trabajador"
               value={busquedaTrabajador}
               onChange={(e) => { setBusquedaTrabajador(e.target.value); setTrabajadorId(''); }}
               placeholder="Escribe para filtrar…"
             />
-            {errores.trabajador && <p className="text-xs text-red-400">{errores.trabajador}</p>}
+            {errores.trabajador && <p className="text-xs text-state-error-fg">{errores.trabajador}</p>}
 
             {/* Lista de usuarios filtrados */}
             {busquedaTrabajador.trim() && (
-              <div className="max-h-44 overflow-y-auto rounded-lg border border-gray-700 bg-gray-900">
+              <div className="max-h-44 overflow-y-auto rounded-ds-lg border border-line-light bg-surface-card shadow-card">
                 {usuariosFiltrados.length === 0 ? (
-                  <p className="px-3 py-3 text-sm text-gray-500">Sin resultados</p>
+                  <p className="px-3 py-3 text-sm text-content-tertiary">Sin resultados</p>
                 ) : (
                   usuariosFiltrados.map((u) => {
                     const presenciaU = presencia.find((p) => p.usuarioId === u.id);
@@ -143,13 +146,13 @@ export function RegistroVisitaPage() {
                         key={u.id}
                         type="button"
                         onClick={() => { setTrabajadorId(u.id); setBusquedaTrabajador(`${u.nombres} ${u.apellidos}`); setErrores((p) => ({ ...p, trabajador: '' })); }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-800 transition-colors"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm border-b border-line-light hover:bg-surface-bg transition-colors"
                       >
                         <div>
-                          <span className="font-medium text-gray-100">{u.nombres} {u.apellidos}</span>
-                          <span className="ml-2 text-xs text-gray-500">{u.jefatura?.nombre ?? '—'}</span>
+                          <span className="font-medium text-content-primary">{u.nombres} {u.apellidos}</span>
+                          <span className="ml-2 text-xs text-content-secondary">{u.jefatura?.nombre ?? '—'}</span>
                         </div>
-                        <span className={`text-xs font-medium ${estaPresente ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        <span className={`text-xs font-medium ${estaPresente ? 'text-state-success-fg' : 'text-content-tertiary'}`}>
                           {estaPresente ? 'Presente' : 'Ausente'}
                         </span>
                       </button>
@@ -161,17 +164,17 @@ export function RegistroVisitaPage() {
 
             {/* Advertencia de ausencia */}
             {trabajadorId && estadoPresencia === 'AUSENTE' && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-900/20 px-3 py-2">
-                <ExclamationTriangleIcon className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-300">
+              <div className="flex items-start gap-2 rounded-ds-lg border border-state-warning-fg/20 bg-state-warning-bg px-3 py-2">
+                <ExclamationTriangleIcon className="h-4 w-4 text-state-warning-fg shrink-0 mt-0.5" />
+                <p className="text-xs text-state-warning-fg">
                   Este trabajador no aparece como presente en la sede. El sistema verificará su estado al registrar la visita.
                 </p>
               </div>
             )}
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" type="button" onClick={() => navigate('/visitas')}>Cancelar</Button>
-              <Button variant="primary" type="submit" disabled={guardando}>
+              <Button theme="light" variant="ghost" type="button" onClick={() => navigate('/visitas')}>Cancelar</Button>
+              <Button theme="light" variant="primary" type="submit" disabled={guardando}>
                 {guardando ? 'Registrando...' : 'Registrar visita'}
               </Button>
             </div>
