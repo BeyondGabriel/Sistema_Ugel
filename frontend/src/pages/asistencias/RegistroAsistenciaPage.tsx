@@ -248,43 +248,43 @@ export function RegistroAsistenciaPage() {
 
   if (cargando) {
     return (
-      <div className="flex justify-center py-20">
-        <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <div className="-mx-6 -my-8 flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-surface-bg">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Registro de asistencias</h1>
-          <p className="text-sm text-gray-400">
+          <h1 className="text-xl font-bold text-content-primary">Registro de asistencias</h1>
+          <p className="text-sm text-content-secondary">
             {new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
         {/* Buscador */}
         <div className="relative w-64">
-          <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-content-tertiary" />
           <input
             type="text"
             placeholder="Buscar trabajador…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full rounded-lg border border-gray-600 bg-gray-800 pl-9 pr-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="input-field pl-9"
           />
         </div>
       </div>
 
       {/* Grupos por jefatura */}
       {grupos.length === 0 ? (
-        <p className="py-10 text-center text-gray-500">No se encontraron trabajadores</p>
+        <p className="py-10 text-center text-content-tertiary">No se encontraron trabajadores</p>
       ) : (
         grupos.map((grupo) => (
           <div key={grupo.nombre}>
             {/* Título de jefatura */}
-            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-500">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-content-secondary">
               <BuildingOfficeIcon className="h-3.5 w-3.5" />
               {grupo.nombre}
             </div>
@@ -303,7 +303,7 @@ export function RegistroAsistenciaPage() {
                 return (
                   <div
                     key={trabajador.id}
-                    className="rounded-xl border border-gray-700 bg-gray-800"
+                    className="rounded-ds-lg border border-line-light bg-surface-card shadow-card"
                   >
                     {/* Fila principal */}
                     <div className="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -313,15 +313,15 @@ export function RegistroAsistenciaPage() {
                         className="flex items-center gap-2 text-left flex-1 min-w-0"
                       >
                         {expandido
-                          ? <ChevronDownIcon className="h-4 w-4 shrink-0 text-gray-400" />
-                          : <ChevronRightIcon className="h-4 w-4 shrink-0 text-gray-400" />
+                          ? <ChevronDownIcon className="h-4 w-4 shrink-0 text-content-tertiary" />
+                          : <ChevronRightIcon className="h-4 w-4 shrink-0 text-content-tertiary" />
                         }
-                        <UserCircleIcon className="h-7 w-7 shrink-0 text-gray-500" />
+                        <UserCircleIcon className="h-7 w-7 shrink-0 text-content-tertiary" />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-100 truncate">
+                          <p className="text-sm font-medium text-content-primary truncate">
                             {trabajador.nombres} {trabajador.apellidos}
                           </p>
-                          <p className="text-xs text-gray-500 truncate">
+                          <p className="text-xs text-content-secondary truncate">
                             {trabajador.email}
                           </p>
                         </div>
@@ -329,21 +329,21 @@ export function RegistroAsistenciaPage() {
 
                       {/* Estado */}
                       {limiteAlcanzado ? (
-                        <span className="rounded-full bg-gray-700 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+                        <span className="badge-warning">
                           Límite diario
                         </span>
                       ) : estaPresente ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/50 px-2.5 py-0.5 text-xs font-medium text-emerald-400">
+                        <span className="badge-success inline-flex items-center gap-1">
                           <CheckCircleIcon className="h-3.5 w-3.5" /> Presente
                         </span>
                       ) : (
-                        <span className="rounded-full bg-gray-700 px-2.5 py-0.5 text-xs font-medium text-gray-400">
+                        <span className="badge-error">
                           Ausente
                         </span>
                       )}
 
                       {/* Campo de hora personalizada (24h) */}
-                      <div className="flex items-center gap-1 text-gray-400">
+                      <div className="flex items-center gap-1 text-content-tertiary">
                         <ClockIcon className="h-4 w-4 shrink-0" />
                         <input
                           type="text"
@@ -356,7 +356,7 @@ export function RegistroAsistenciaPage() {
                           }
                           placeholder="HH:mm"
                           pattern="[0-2][0-9]:[0-5][0-9]"
-                          className="rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-20"
+                          className="input-field w-20 px-2 py-1 text-xs text-center"
                           title="Hora en formato 24h (ej. 14:30)"
                         />
                       </div>
@@ -366,6 +366,7 @@ export function RegistroAsistenciaPage() {
                         <Button
                           variant="primary"
                           size="sm"
+                          theme="light"
                           disabled={limiteAlcanzado || estaPresente || registrando[trabajador.id]}
                           onClick={() => registrar(trabajador, 'ENTRADA')}
                         >
@@ -374,6 +375,7 @@ export function RegistroAsistenciaPage() {
                         <Button
                           variant="danger"
                           size="sm"
+                          theme="light"
                           disabled={limiteAlcanzado || !estaPresente || registrando[trabajador.id]}
                           onClick={() => registrar(trabajador, 'SALIDA')}
                         >
@@ -384,11 +386,11 @@ export function RegistroAsistenciaPage() {
 
                     {/* Historial del día (expandible) */}
                     {expandido && (
-                      <div className="border-t border-gray-700 px-4 py-3">
+                      <div className="border-t border-line-light px-4 py-3">
                         {cargandoMov ? (
-                          <p className="text-xs text-gray-500">Cargando historial…</p>
+                          <p className="text-xs text-content-tertiary">Cargando historial…</p>
                         ) : movs.length === 0 ? (
-                          <p className="text-xs text-gray-500">Sin movimientos hoy</p>
+                          <p className="text-xs text-content-tertiary">Sin movimientos hoy</p>
                         ) : (
                           <ul className="space-y-1.5">
                             {movs.map((mov) => {
@@ -399,15 +401,15 @@ export function RegistroAsistenciaPage() {
                                   className="flex items-center gap-3 text-xs"
                                 >
                                   <span
-                                    className={`font-medium w-14 ${mov.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-red-400'}`}
+                                    className={`font-medium w-14 ${mov.tipo === 'ENTRADA' ? 'text-state-success-fg' : 'text-state-error-fg'}`}
                                   >
                                     {mov.tipo === 'ENTRADA' ? 'Entrada' : 'Salida'}
                                   </span>
-                                  <span className="text-gray-400">{formatHora(mov.timestamp)}</span>
+                                  <span className="text-content-secondary">{formatHora(mov.timestamp)}</span>
                                   {puedeEditar && (
                                     <button
                                       onClick={() => abrirEditar(mov)}
-                                      className="ml-1 text-gray-500 hover:text-gray-200 transition-colors"
+                                      className="ml-1 text-content-tertiary hover:text-brand-blue transition-colors"
                                       title="Editar hora"
                                     >
                                       <PencilIcon className="h-3.5 w-3.5" />
@@ -419,7 +421,7 @@ export function RegistroAsistenciaPage() {
                           </ul>
                         )}
                         {ciclos >= 4 && (
-                          <p className="mt-2 text-xs font-medium text-amber-400">
+                          <p className="mt-2 text-xs font-medium text-state-warning-fg">
                             Límite diario alcanzado (4 ciclos)
                           </p>
                         )}
@@ -440,30 +442,31 @@ export function RegistroAsistenciaPage() {
         title="Editar movimiento"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-content-secondary">
             Modificando{' '}
-            <span className={`font-semibold ${modalEditar.mov?.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-red-400'}`}>
+            <span className={`font-semibold ${modalEditar.mov?.tipo === 'ENTRADA' ? 'text-state-success-fg' : 'text-state-error-fg'}`}>
               {modalEditar.mov?.tipo}
             </span>
           </p>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-300">Nueva fecha y hora</label>
+            <label className="text-sm font-medium text-content-secondary">Nueva fecha y hora</label>
             <input
               type="datetime-local"
               value={nuevoTimestamp}
               onChange={(e) => setNuevoTimestamp(e.target.value)}
-              className="rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="input-field"
             />
           </div>
           <div className="flex justify-end gap-3 pt-1">
             <Button
               variant="ghost"
+              theme="light"
               onClick={() => setModalEditar({ isOpen: false, mov: null })}
               disabled={editando}
             >
               Cancelar
             </Button>
-            <Button variant="primary" disabled={editando} onClick={guardarEdicion}>
+            <Button variant="primary" theme="light" disabled={editando} onClick={guardarEdicion}>
               {editando ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>

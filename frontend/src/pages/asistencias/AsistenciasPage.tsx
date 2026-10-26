@@ -83,9 +83,6 @@ function agruparPorDia(movimientos: MovimientoConJefatura[]): FilaDia[] {
   });
 }
 
-const SELECT_CLS =
-  'rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-
 export function AsistenciasPage() {
   const { user } = useAuth();
   const { mostrar } = useToast();
@@ -183,26 +180,27 @@ export function AsistenciasPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <ClipboardDocumentListIcon className="h-6 w-6 text-emerald-400" />
+          <ClipboardDocumentListIcon className="h-6 w-6 text-brand-blue" />
           <div>
-            <h1 className="text-xl font-bold text-gray-100">Asistencias</h1>
-            <p className="text-sm text-gray-400">{filas.length} registros</p>
+            <h1 className="text-xl font-bold text-content-primary">Asistencias</h1>
+            <p className="text-sm text-content-secondary">{filas.length} registros</p>
           </div>
         </div>
         <div className="flex gap-2">
           {(user?.rol === 'VIGILANTE' || user?.rol === 'ADMIN') && (
             <Link to="/asistencias/registro">
-              <Button variant="secondary" size="sm">Registrar asistencia</Button>
+              <Button variant="secondary" size="sm" theme="light">Registrar asistencia</Button>
             </Link>
           )}
           {puedeListarUsuarios && (
             <Button
               variant="ghost"
               size="sm"
+              theme="light"
               disabled={exportando}
               onClick={exportar}
             >
@@ -213,12 +211,12 @@ export function AsistenciasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
-        <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+        <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         {esJefeODirectora && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Alcance</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-gray-600">
+            <span className="text-xs text-content-secondary">Alcance</span>
+            <div className="inline-flex overflow-hidden rounded-ds-lg border border-line-light">
               {([
                 { valor: 'equipo', label: 'Mis subordinados' },
                 { valor: 'propios', label: 'Solo mis registros' },
@@ -229,8 +227,8 @@ export function AsistenciasPage() {
                   onClick={() => setAlcance(opcion.valor)}
                   className={`px-3 py-1.5 text-sm transition-colors ${
                     alcance === opcion.valor
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                      ? 'bg-brand-blue text-content-inverse'
+                      : 'bg-surface-card text-content-secondary hover:bg-surface-bg'
                   }`}
                 >
                   {opcion.label}
@@ -240,32 +238,32 @@ export function AsistenciasPage() {
           </div>
         )}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Desde</span>
+          <span className="text-xs text-content-secondary">Desde</span>
           <input
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className={SELECT_CLS}
+            className="input-field sm:w-auto"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Hasta</span>
+          <span className="text-xs text-content-secondary">Hasta</span>
           <input
             type="date"
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className={SELECT_CLS}
+            className="input-field sm:w-auto"
           />
         </div>
         {puedeListarUsuarios && (
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-gray-500">Trabajador</span>
+            <span className="text-xs text-content-secondary">Trabajador</span>
             <select
               value={usuarioFiltro}
               onChange={(e) =>
                 setUsuarioFiltro(e.target.value ? Number(e.target.value) : '')
               }
-              className={SELECT_CLS}
+              className="input-field sm:w-auto"
             >
               <option value="">Todos</option>
               {usuarios.map((u) => (
@@ -277,13 +275,13 @@ export function AsistenciasPage() {
           </div>
         )}
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Jefatura</span>
+          <span className="text-xs text-content-secondary">Jefatura</span>
           <select
             value={jefaturaFiltro}
             onChange={(e) =>
               setJefaturaFiltro(e.target.value ? Number(e.target.value) : '')
             }
-            className={SELECT_CLS}
+            className="input-field sm:w-auto"
           >
             <option value="">Todas</option>
             {jefaturas.map((j) => (
@@ -296,9 +294,9 @@ export function AsistenciasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-gray-700">
+      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-800 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
               <th className="px-4 py-3 text-left">Apellidos</th>
@@ -309,16 +307,16 @@ export function AsistenciasPage() {
               <th className="px-4 py-3 text-center">Estado</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700 bg-gray-900">
+          <tbody className="bg-surface-card divide-y divide-line-light">
             {cargando ? (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center">
-                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
                 </td>
               </tr>
             ) : filas.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-content-tertiary">
                   Sin registros en el rango seleccionado
                 </td>
               </tr>
@@ -326,31 +324,29 @@ export function AsistenciasPage() {
               filas.map((fila) => (
                 <tr
                   key={`${fila.usuarioId}-${fila.diaKey}`}
-                  className="hover:bg-gray-800/60 transition-colors"
+                  className="hover:bg-surface-bg transition-colors"
                 >
-                  <td className="px-4 py-2.5 font-medium text-gray-100 whitespace-nowrap">
+                  <td className="px-4 py-2.5 font-medium text-content-primary whitespace-nowrap">
                     {fila.nombres}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-300 whitespace-nowrap">
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">
                     {fila.apellidos}
                   </td>
-                  <td className="px-4 py-2.5 text-gray-400">{fila.jefatura}</td>
-                  <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">
+                  <td className="px-4 py-2.5 text-content-secondary">{fila.jefatura}</td>
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">
                     {formatFecha(fila.diaKey)}
                   </td>
-                  <td className="px-4 py-2.5 text-emerald-400">
+                  <td className="px-4 py-2.5 text-state-success-fg">
                     {fila.horaEntrada ? formatHora(fila.horaEntrada) : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-red-400">
+                  <td className="px-4 py-2.5 text-state-error-fg">
                     {fila.horaSalida ? formatHora(fila.horaSalida) : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-center">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        fila.estado === 'Presente'
-                          ? 'bg-emerald-900/50 text-emerald-400'
-                          : 'bg-gray-700 text-gray-500'
-                      }`}
+                      className={
+                        fila.estado === 'Presente' ? 'badge-success' : 'badge-error'
+                      }
                     >
                       {fila.estado}
                     </span>

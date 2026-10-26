@@ -47,8 +47,6 @@ function agruparPorDia(movimientos: MovimientoConJefatura[]): FilaDia[] {
   return Array.from(mapa.values()).sort((a, b) => b.diaKey.localeCompare(a.diaKey));
 }
 
-const INPUT_CLS = 'rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-
 export function MisAsistenciasPage() {
   const { user } = useAuth();
   const { mostrar } = useToast();
@@ -93,19 +91,20 @@ export function MisAsistenciasPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <ClipboardDocumentListIcon className="h-6 w-6 text-blue-400" />
+          <ClipboardDocumentListIcon className="h-6 w-6 text-brand-blue" />
           <div>
-            <h1 className="text-xl font-bold text-gray-100">Mis Asistencias</h1>
-            <p className="text-sm text-gray-400">{filas.length} días con registro</p>
+            <h1 className="text-xl font-bold text-content-primary">Mis Asistencias</h1>
+            <p className="text-sm text-content-secondary">{filas.length} días con registro</p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="sm"
+          theme="light"
           disabled={exportando}
           onClick={exportar}
         >
@@ -114,22 +113,22 @@ export function MisAsistenciasPage() {
       </div>
 
       {/* Filtros de fecha */}
-      <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
-        <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+        <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Desde</span>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Desde</span>
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field sm:w-auto" />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Hasta</span>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Hasta</span>
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field sm:w-auto" />
         </div>
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-xl border border-gray-700">
+      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-800 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+          <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Fecha</th>
               <th className="px-4 py-3 text-left">Hora de entrada</th>
@@ -137,39 +136,33 @@ export function MisAsistenciasPage() {
               <th className="px-4 py-3 text-center">Estado</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700 bg-gray-900">
+          <tbody className="divide-y divide-line-light bg-surface-card">
             {cargando ? (
               <tr>
                 <td colSpan={4} className="px-4 py-10 text-center">
-                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                  <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
                 </td>
               </tr>
             ) : filas.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-gray-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-content-tertiary">
                   Sin registros en el rango seleccionado
                 </td>
               </tr>
             ) : (
               filas.map((fila) => (
-                <tr key={fila.diaKey} className="hover:bg-gray-800/60 transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-gray-100 whitespace-nowrap">
+                <tr key={fila.diaKey} className="hover:bg-surface-bg transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-content-primary whitespace-nowrap">
                     {formatFecha(fila.diaKey)}
                   </td>
-                  <td className="px-4 py-2.5 text-emerald-400">
+                  <td className="px-4 py-2.5 text-state-success-fg">
                     {fila.horaEntrada ? formatHora(fila.horaEntrada) : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-red-400">
+                  <td className="px-4 py-2.5 text-state-error-fg">
                     {fila.horaSalida ? formatHora(fila.horaSalida) : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-center">
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        fila.estado === 'Presente'
-                          ? 'bg-emerald-900/50 text-emerald-400'
-                          : 'bg-gray-700 text-gray-500'
-                      }`}
-                    >
+                    <span className={fila.estado === 'Presente' ? 'badge-success' : 'badge-error'}>
                       {fila.estado}
                     </span>
                   </td>
