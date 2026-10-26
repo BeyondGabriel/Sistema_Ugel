@@ -26,14 +26,14 @@ const ETIQUETA_ESTADO: Record<EstadoPapeleta, string> = {
 };
 
 const BADGE: Record<EstadoPapeleta, string> = {
-  PENDIENTE: 'bg-blue-900/50 text-blue-300',
-  EN_REVISION: 'bg-amber-900/50 text-amber-300',
-  OBSERVADO: 'bg-orange-900/50 text-orange-300',
-  APROBADO: 'bg-emerald-900/50 text-emerald-300',
-  RECHAZADO: 'bg-red-900/50 text-red-300',
-  CANCELADO: 'bg-gray-700 text-gray-400',
-  ANULADO: 'bg-orange-900/50 text-orange-300',
-  ANULACION_SOLICITADA: 'bg-amber-900/50 text-amber-300',
+  PENDIENTE: 'badge-info',
+  EN_REVISION: 'badge-warning',
+  OBSERVADO: 'badge-warning',
+  APROBADO: 'badge-success',
+  RECHAZADO: 'badge-error',
+  CANCELADO: 'badge bg-line-strong text-content-secondary',
+  ANULADO: 'badge-error',
+  ANULACION_SOLICITADA: 'badge-warning',
 };
 
 export function VerificarTokenPage() {
@@ -72,21 +72,22 @@ export function VerificarTokenPage() {
   const p = resultado?.papeleta;
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       {/* Encabezado */}
       <div className="flex items-center gap-3">
-        <QrCodeIcon className="h-6 w-6 text-emerald-400" />
+        <QrCodeIcon className="h-6 w-6 text-brand-blue" />
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Verificar token de papeleta</h1>
-          <p className="text-sm text-gray-400">Comprueba la validez de una papeleta ingresando su código</p>
+          <h1 className="text-xl font-bold text-content-primary">Verificar token de papeleta</h1>
+          <p className="text-sm text-content-secondary">Comprueba la validez de una papeleta ingresando su código</p>
         </div>
       </div>
 
       {/* Formulario de búsqueda */}
-      <Card>
+      <Card theme="light">
         <form onSubmit={handleSubmit} className="flex gap-3 items-end">
           <div className="flex-1">
             <Input
+              theme="light"
               label="Código de verificación"
               value={token}
               onChange={(e) => { setToken(e.target.value.toUpperCase()); setResultado(null); }}
@@ -95,7 +96,7 @@ export function VerificarTokenPage() {
               className="font-mono tracking-widest uppercase"
             />
           </div>
-          <Button variant="primary" type="submit" disabled={verificando} className="mb-0.5">
+          <Button theme="light" variant="primary" type="submit" disabled={verificando} className="mb-0.5">
             {verificando ? 'Verificando...' : 'Verificar'}
           </Button>
         </form>
@@ -104,30 +105,30 @@ export function VerificarTokenPage() {
       {/* Resultado */}
       {resultado !== null && (
         resultado.valido && p ? (
-          <Card>
+          <Card theme="light">
             <div className="flex items-start gap-3 mb-4">
-              <CheckCircleIcon className="h-6 w-6 text-emerald-400 shrink-0 mt-0.5" />
+              <CheckCircleIcon className="h-6 w-6 text-state-success-fg shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-emerald-400">Token válido</p>
-                <p className="text-xs text-gray-500">La papeleta fue encontrada y verificada correctamente</p>
+                <p className="font-semibold text-content-primary">Token válido</p>
+                <p className="text-xs text-content-secondary">La papeleta fue encontrada y verificada correctamente</p>
               </div>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex gap-4 py-1.5 border-b border-gray-700">
-                <span className="w-32 shrink-0 text-xs text-gray-500">N° Papeleta</span>
-                <span className="font-bold text-gray-100">{p.numero}</span>
+              <div className="flex gap-4 py-1.5 border-b border-line-light">
+                <span className="w-32 shrink-0 text-xs text-content-secondary">N° Papeleta</span>
+                <span className="font-bold text-content-primary">{p.numero}</span>
               </div>
-              <div className="flex gap-4 py-1.5 border-b border-gray-700">
-                <span className="w-32 shrink-0 text-xs text-gray-500">Solicitante</span>
-                <span className="text-gray-200">{p.solicitante.nombres} {p.solicitante.apellidos}</span>
+              <div className="flex gap-4 py-1.5 border-b border-line-light">
+                <span className="w-32 shrink-0 text-xs text-content-secondary">Solicitante</span>
+                <span className="text-content-primary">{p.solicitante.nombres} {p.solicitante.apellidos}</span>
               </div>
-              <div className="flex gap-4 py-1.5 border-b border-gray-700">
-                <span className="w-32 shrink-0 text-xs text-gray-500">Tipo</span>
-                <span className="text-gray-200">{p.tipoTiempo === 'DIAS' ? 'Por día(s)' : 'Por horas'}</span>
+              <div className="flex gap-4 py-1.5 border-b border-line-light">
+                <span className="w-32 shrink-0 text-xs text-content-secondary">Tipo</span>
+                <span className="text-content-primary">{p.tipoTiempo === 'DIAS' ? 'Por día(s)' : 'Por horas'}</span>
               </div>
-              <div className="flex gap-4 py-1.5 border-b border-gray-700">
-                <span className="w-32 shrink-0 text-xs text-gray-500">Período</span>
-                <span className="text-gray-200">
+              <div className="flex gap-4 py-1.5 border-b border-line-light">
+                <span className="w-32 shrink-0 text-xs text-content-secondary">Período</span>
+                <span className="text-content-primary">
                   {p.tipoTiempo === 'DIAS'
                     ? `${formatFecha(p.fechaInicio)} al ${formatFecha(p.fechaFin)}`
                     : `${formatFecha(p.fechaInicio)} · ${p.horaSalida ? formatHora(p.horaSalida) : ''} → ${p.horaRetorno ? formatHora(p.horaRetorno) : ''}`
@@ -135,19 +136,19 @@ export function VerificarTokenPage() {
                 </span>
               </div>
               <div className="flex gap-4 py-1.5">
-                <span className="w-32 shrink-0 text-xs text-gray-500">Estado</span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE[p.estado]}`}>
+                <span className="w-32 shrink-0 text-xs text-content-secondary">Estado</span>
+                <span className={BADGE[p.estado]}>
                   {ETIQUETA_ESTADO[p.estado]}
                 </span>
               </div>
             </div>
           </Card>
         ) : (
-          <div className="flex items-center gap-3 rounded-xl border border-red-800 bg-red-900/20 p-4">
-            <XCircleIcon className="h-6 w-6 text-red-400 shrink-0" />
+          <div className="flex items-center gap-3 rounded-ds-lg border border-state-error-fg/20 bg-state-error-bg p-4">
+            <XCircleIcon className="h-6 w-6 text-state-error-fg shrink-0" />
             <div>
-              <p className="font-semibold text-red-400">Token no encontrado o inválido</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="font-semibold text-state-error-fg">Token no encontrado o inválido</p>
+              <p className="text-xs text-content-secondary mt-0.5">
                 {resultado.mensaje ?? 'Verifica que el código esté escrito correctamente.'}
               </p>
             </div>

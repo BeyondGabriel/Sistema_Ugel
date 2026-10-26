@@ -44,14 +44,14 @@ const TABS: { label: string; estados: EstadoPapeleta[] }[] = [
 ];
 
 const BADGE_ESTADO: Record<EstadoPapeleta, string> = {
-  PENDIENTE: 'bg-blue-900/50 text-blue-300',
-  EN_REVISION: 'bg-amber-900/50 text-amber-300',
-  OBSERVADO: 'bg-orange-900/50 text-orange-300',
-  APROBADO: 'bg-emerald-900/50 text-emerald-300',
-  RECHAZADO: 'bg-red-900/50 text-red-300',
-  CANCELADO: 'bg-gray-700 text-gray-400',
-  ANULADO: 'bg-orange-900/50 text-orange-300',
-  ANULACION_SOLICITADA: 'bg-amber-900/50 text-amber-300',
+  PENDIENTE: 'badge-info',
+  EN_REVISION: 'badge-warning',
+  OBSERVADO: 'badge-warning',
+  APROBADO: 'badge-success',
+  RECHAZADO: 'badge-error',
+  CANCELADO: 'badge bg-line-strong text-content-secondary',
+  ANULADO: 'badge-error',
+  ANULACION_SOLICITADA: 'badge-warning',
 };
 
 const ETIQUETA_ESTADO: Record<EstadoPapeleta, string> = {
@@ -96,12 +96,12 @@ function ModalTexto({ isOpen, title, placeholder, onConfirmar, onClose, cargando
           onChange={(e) => { setTexto(e.target.value); setError(''); }}
           placeholder={placeholder}
           rows={4}
-          className="w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="input-field"
         />
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-state-error-fg">{error}</p>}
         <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={onClose} disabled={cargando}>Cancelar</Button>
-          <Button variant="primary" onClick={confirmar} disabled={cargando}>
+          <Button theme="light" variant="ghost" onClick={onClose} disabled={cargando}>Cancelar</Button>
+          <Button theme="light" variant="primary" onClick={confirmar} disabled={cargando}>
             {cargando ? 'Procesando...' : 'Confirmar'}
           </Button>
         </div>
@@ -208,19 +208,17 @@ export function PapeletasPage() {
 
   const papeletasDeTab = papeletas.filter((p) => TABS[tabActiva].estados.includes(p.estado));
 
-  const INPUT_CLS = 'rounded-lg border border-gray-600 bg-gray-800 px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
-
   return (
-    <div className="space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-gray-100">Papeletas</h1>
+        <h1 className="text-xl font-bold text-content-primary">Papeletas</h1>
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" disabled={exportando} onClick={exportar}>
+          <Button theme="light" variant="ghost" size="sm" disabled={exportando} onClick={exportar}>
             <ArrowDownTrayIcon className="h-4 w-4" /> Exportar Excel
           </Button>
           <Link to="/papeletas/nueva">
-            <Button variant="primary" size="sm">
+            <Button theme="light" variant="primary" size="sm">
               <PlusIcon className="h-4 w-4" /> Nueva papeleta
             </Button>
           </Link>
@@ -228,20 +226,20 @@ export function PapeletasPage() {
       </div>
 
       {/* Filtros de fecha */}
-      <div className="flex flex-wrap gap-3 rounded-xl border border-gray-700 bg-gray-800 p-4">
-        <FunnelIcon className="h-4 w-4 mt-1.5 text-gray-500 shrink-0" />
+      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+        <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Desde</span>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Desde</span>
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field sm:w-auto" />
         </div>
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-gray-500">Hasta</span>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={INPUT_CLS} />
+          <span className="text-xs text-content-secondary">Hasta</span>
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field sm:w-auto" />
         </div>
       </div>
 
       {/* Pestañas */}
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-gray-700 bg-gray-800/50 p-1">
+      <div className="flex gap-1 overflow-x-auto rounded-ds-lg border border-line-light bg-surface-card p-1">
         {tabsConConteos.map((tab, i) => (
           <button
             key={tab.label}
@@ -249,13 +247,13 @@ export function PapeletasPage() {
             className={[
               'flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               tabActiva === i
-                ? 'bg-gray-700 text-gray-100'
-                : 'text-gray-400 hover:text-gray-200',
+                ? 'bg-surface-bg text-brand-blue shadow-sm'
+                : 'text-content-secondary hover:text-content-primary',
             ].join(' ')}
           >
             {tab.label}
             {tab.count > 0 && (
-              <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${tabActiva === i ? 'bg-emerald-600/40 text-emerald-300' : 'bg-gray-600 text-gray-300'}`}>
+              <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${tabActiva === i ? 'bg-brand-blue/10 text-brand-blue' : 'bg-line-strong text-content-secondary'}`}>
                 {tab.count}
               </span>
             )}
@@ -266,10 +264,10 @@ export function PapeletasPage() {
       {/* Lista */}
       {cargando ? (
         <div className="flex justify-center py-10">
-          <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
         </div>
       ) : papeletasDeTab.length === 0 ? (
-        <div className="rounded-xl border border-gray-700 bg-gray-800 py-10 text-center text-gray-500 text-sm">
+        <div className="rounded-ds-lg border border-line-light bg-surface-card py-10 text-center text-content-tertiary text-sm">
           No hay papeletas en esta categoría
         </div>
       ) : (
@@ -281,31 +279,31 @@ export function PapeletasPage() {
             const enAccion = accionId === p.id;
 
             return (
-              <div key={p.id} className="rounded-xl border border-gray-700 bg-gray-800 p-4">
+              <div key={p.id} className="rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
                 <div className="flex flex-wrap items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-gray-100">N° {p.numero}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_ESTADO[p.estado]}`}>
+                      <span className="text-sm font-bold text-content-primary">N° {p.numero}</span>
+                      <span className={BADGE_ESTADO[p.estado]}>
                         {ETIQUETA_ESTADO[p.estado]}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-content-secondary">
                       {p.solicitante
                         ? `${p.solicitante.nombres} ${p.solicitante.apellidos}`
                         : `Usuario #${p.solicitanteId}`}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-content-secondary">
                       {p.tipoTiempo === 'DIAS'
                         ? `${formatFecha(p.fechaInicio)} al ${formatFecha(p.fechaFin)}`
                         : `${formatFecha(p.fechaInicio)} · ${formatHora(p.horaSalida ?? p.fechaInicio)} → ${formatHora(p.horaRetorno ?? p.fechaFin)}`
                       }
                     </p>
-                    <p className="mt-0.5 text-xs text-gray-500 truncate">
+                    <p className="mt-0.5 text-xs text-content-secondary truncate">
                       {p.motivo}{p.motivoOtros ? `: ${p.motivoOtros}` : ''}
                     </p>
                     {p.motivoRechazo && (
-                      <p className="mt-1 text-xs text-orange-400">
+                      <p className="mt-1 text-xs text-state-warning-fg">
                         Observación/Rechazo: {p.motivoRechazo}
                       </p>
                     )}
@@ -313,12 +311,13 @@ export function PapeletasPage() {
 
                   <div className="flex flex-wrap gap-2 shrink-0">
                     <Link to={`/papeletas/${p.id}`}>
-                      <Button variant="ghost" size="sm">
+                      <Button theme="light" variant="ghost" size="sm">
                         <EyeIcon className="h-4 w-4" /> Ver
                       </Button>
                     </Link>
 
                     <Button
+                      theme="light"
                       variant="ghost"
                       size="sm"
                       onClick={() => papeletaService.abrirPDF(p.id)}
@@ -328,6 +327,7 @@ export function PapeletasPage() {
 
                     {esSolicitante && (p.estado === 'PENDIENTE' || p.estado === 'OBSERVADO') && (
                       <Button
+                        theme="light"
                         variant="danger"
                         size="sm"
                         disabled={enAccion}
@@ -339,6 +339,7 @@ export function PapeletasPage() {
 
                     {esSolicitante && p.estado === 'APROBADO' && (
                       <Button
+                        theme="light"
                         variant="secondary"
                         size="sm"
                         disabled={enAccion}
@@ -350,6 +351,7 @@ export function PapeletasPage() {
 
                     {esSolicitante && p.estado === 'ANULACION_SOLICITADA' && (
                       <Button
+                        theme="light"
                         variant="ghost"
                         size="sm"
                         disabled={enAccion}
@@ -361,6 +363,7 @@ export function PapeletasPage() {
 
                     {(esAprobador || esAdmin) && p.estado === 'PENDIENTE' && (
                       <Button
+                        theme="light"
                         variant="secondary"
                         size="sm"
                         disabled={enAccion}
@@ -373,6 +376,7 @@ export function PapeletasPage() {
                     {(esAprobador || esAdmin) && p.estado === 'EN_REVISION' && (
                       <>
                         <Button
+                          theme="light"
                           variant="primary"
                           size="sm"
                           disabled={enAccion}
@@ -381,6 +385,7 @@ export function PapeletasPage() {
                           <CheckIcon className="h-4 w-4" /> Aprobar
                         </Button>
                         <Button
+                          theme="light"
                           variant="secondary"
                           size="sm"
                           onClick={() => setModalObservacion({ isOpen: true, id: p.id })}
@@ -388,6 +393,7 @@ export function PapeletasPage() {
                           <ChatBubbleLeftIcon className="h-4 w-4" /> Observar
                         </Button>
                         <Button
+                          theme="light"
                           variant="danger"
                           size="sm"
                           onClick={() => setModalRechazo({ isOpen: true, id: p.id })}
@@ -399,6 +405,7 @@ export function PapeletasPage() {
 
                     {(esAprobador || esAdmin) && (p.estado === 'APROBADO' || p.estado === 'ANULACION_SOLICITADA') && (
                       <Button
+                        theme="light"
                         variant="danger"
                         size="sm"
                         onClick={() => setModalAnulacion({ isOpen: true, id: p.id })}
@@ -459,10 +466,11 @@ export function PapeletasPage() {
         onClose={() => setModalCancelar({ isOpen: false, id: null })}
         title="Cancelar papeleta"
       >
-        <p className="text-sm text-gray-300">¿Estás seguro de que deseas cancelar esta papeleta? Esta acción no se puede deshacer.</p>
+        <p className="text-sm text-content-secondary">¿Estás seguro de que deseas cancelar esta papeleta? Esta acción no se puede deshacer.</p>
         <div className="mt-4 flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setModalCancelar({ isOpen: false, id: null })}>No, mantener</Button>
+          <Button theme="light" variant="ghost" onClick={() => setModalCancelar({ isOpen: false, id: null })}>No, mantener</Button>
           <Button
+            theme="light"
             variant="danger"
             disabled={accionId !== null}
             onClick={() => {

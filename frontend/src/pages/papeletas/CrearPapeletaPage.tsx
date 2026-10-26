@@ -22,7 +22,6 @@ const MOTIVOS = [
   'Otros',
 ] as const;
 
-const SELECT_CLS = 'w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 const REGEX_24H = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export function CrearPapeletaPage() {
@@ -162,33 +161,33 @@ export function CrearPapeletaPage() {
 
   if (cargando) {
     return (
-      <div className="flex justify-center py-20">
-        <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <div className="-mx-6 -my-8 flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-surface-bg">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-xl space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       {/* Encabezado */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/papeletas')}>
+        <Button theme="light" variant="ghost" size="sm" onClick={() => navigate('/papeletas')}>
           <ArrowLeftIcon className="h-4 w-4" /> Volver
         </Button>
         <div className="flex items-center gap-2">
-          <DocumentPlusIcon className="h-5 w-5 text-emerald-400" />
-          <h1 className="text-xl font-bold text-gray-100">
+          <DocumentPlusIcon className="h-5 w-5 text-brand-blue" />
+          <h1 className="text-xl font-bold text-content-primary">
             {esEdicion ? 'Reenviar papeleta observada' : 'Nueva papeleta'}
           </h1>
         </div>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card>
+        <Card theme="light">
           <div className="space-y-4">
             {/* Tipo de permiso */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-300">Tipo de permiso *</label>
+              <label className="text-sm font-medium text-content-primary">Tipo de permiso *</label>
               <div className="flex gap-3">
                 {(['DIAS', 'HORAS'] as const).map((t) => (
                   <button
@@ -196,10 +195,10 @@ export function CrearPapeletaPage() {
                     type="button"
                     onClick={() => setTipoTiempo(t)}
                     className={[
-                      'flex-1 rounded-lg border py-2 text-sm font-medium transition-colors',
+                      'flex-1 rounded-ds-lg border py-2 text-sm font-medium transition-colors',
                       tipoTiempo === t
-                        ? 'border-emerald-600 bg-emerald-900/40 text-emerald-400'
-                        : 'border-gray-600 bg-gray-800 text-gray-400 hover:border-gray-500',
+                        ? 'border-brand-blue bg-brand-blue/10 text-brand-blue'
+                        : 'border-line-light bg-surface-card text-content-secondary hover:border-line-strong',
                     ].join(' ')}
                   >
                     {t === 'DIAS' ? 'Por día(s)' : 'Por horas'}
@@ -212,6 +211,7 @@ export function CrearPapeletaPage() {
             {tipoTiempo === 'DIAS' ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Input
+                  theme="light"
                   label="Fecha inicio *"
                   type="date"
                   value={fechaInicio}
@@ -219,6 +219,7 @@ export function CrearPapeletaPage() {
                   error={errores.fechaInicio}
                 />
                 <Input
+                  theme="light"
                   label="Fecha fin *"
                   type="date"
                   value={fechaFin}
@@ -230,6 +231,7 @@ export function CrearPapeletaPage() {
             ) : (
               <>
                 <Input
+                  theme="light"
                   label="Fecha del permiso *"
                   type="date"
                   value={fechaHoras}
@@ -238,6 +240,7 @@ export function CrearPapeletaPage() {
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input
+                    theme="light"
                     label="Hora de salida * (24h)"
                     type="text"
                     value={horaSalida}
@@ -246,6 +249,7 @@ export function CrearPapeletaPage() {
                     placeholder="HH:mm"
                   />
                   <Input
+                    theme="light"
                     label="Hora de retorno * (24h)"
                     type="text"
                     value={horaRetorno}
@@ -259,11 +263,11 @@ export function CrearPapeletaPage() {
 
             {/* Motivo */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-300">Motivo *</label>
+              <label className="text-sm font-medium text-content-primary">Motivo *</label>
               <select
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                className={SELECT_CLS}
+                className="input-field"
               >
                 {MOTIVOS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -271,6 +275,7 @@ export function CrearPapeletaPage() {
 
             {motivo === 'Otros' && (
               <Input
+                theme="light"
                 label="Especifica el motivo *"
                 value={motivoOtros}
                 onChange={(e) => { setMotivoOtros(e.target.value); setErrores((p) => ({ ...p, motivoOtros: '' })); }}
@@ -281,10 +286,10 @@ export function CrearPapeletaPage() {
 
             {/* Botones */}
             <div className="flex justify-end gap-3 pt-2">
-              <Button variant="ghost" type="button" onClick={() => navigate('/papeletas')} disabled={guardando}>
+              <Button theme="light" variant="ghost" type="button" onClick={() => navigate('/papeletas')} disabled={guardando}>
                 Cancelar
               </Button>
-              <Button variant="primary" type="submit" disabled={guardando}>
+              <Button theme="light" variant="primary" type="submit" disabled={guardando}>
                 {guardando ? (esEdicion ? 'Reenviando...' : 'Enviando...') : (esEdicion ? 'Reenviar solicitud' : 'Enviar solicitud')}
               </Button>
             </div>

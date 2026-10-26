@@ -40,14 +40,14 @@ function formatFecha(ts: string): string {
 }
 
 const BADGE_ESTADO: Record<EstadoPapeleta, string> = {
-  PENDIENTE: 'bg-blue-900/50 text-blue-300',
-  EN_REVISION: 'bg-amber-900/50 text-amber-300',
-  OBSERVADO: 'bg-orange-900/50 text-orange-300',
-  APROBADO: 'bg-emerald-900/50 text-emerald-300',
-  RECHAZADO: 'bg-red-900/50 text-red-300',
-  CANCELADO: 'bg-gray-700 text-gray-400',
-  ANULADO: 'bg-orange-900/50 text-orange-300',
-  ANULACION_SOLICITADA: 'bg-amber-900/50 text-amber-300',
+  PENDIENTE: 'badge-info',
+  EN_REVISION: 'badge-warning',
+  OBSERVADO: 'badge-warning',
+  APROBADO: 'badge-success',
+  RECHAZADO: 'badge-error',
+  CANCELADO: 'badge bg-line-strong text-content-secondary',
+  ANULADO: 'badge-error',
+  ANULACION_SOLICITADA: 'badge-warning',
 };
 const ETIQUETA_ESTADO: Record<EstadoPapeleta, string> = {
   PENDIENTE: 'Pendiente',
@@ -62,9 +62,9 @@ const ETIQUETA_ESTADO: Record<EstadoPapeleta, string> = {
 
 function Fila({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-4 py-2 border-b border-gray-700 last:border-0">
-      <span className="w-36 shrink-0 text-xs font-medium text-gray-500">{label}</span>
-      <span className="text-sm text-gray-200">{value}</span>
+    <div className="flex gap-4 py-2 border-b border-line-light last:border-0">
+      <span className="w-36 shrink-0 text-xs font-medium text-content-secondary">{label}</span>
+      <span className="text-sm text-content-primary">{value}</span>
     </div>
   );
 }
@@ -234,8 +234,8 @@ export function DetallePapeletaPage() {
 
   if (cargando) {
     return (
-      <div className="flex justify-center py-20">
-        <span className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <div className="-mx-6 -my-8 flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-surface-bg">
+        <span className="h-7 w-7 animate-spin rounded-full border-2 border-brand-blue border-t-transparent" />
       </div>
     );
   }
@@ -255,23 +255,22 @@ export function DetallePapeletaPage() {
     Boolean(papeleta.requiereAprobadorEspecial) && papeleta.aprobadorId === null;
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       {/* Encabezado */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/papeletas')}>
+          <Button theme="light" variant="ghost" size="sm" onClick={() => navigate('/papeletas')}>
             <ArrowLeftIcon className="h-4 w-4" /> Volver
           </Button>
           <div>
-            <h1 className="text-xl font-bold text-gray-100">Papeleta N° {papeleta.numero}</h1>
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_ESTADO[papeleta.estado]}`}
-            >
+            <h1 className="text-xl font-bold text-content-primary">Papeleta N° {papeleta.numero}</h1>
+            <span className={`inline-block ${BADGE_ESTADO[papeleta.estado]}`}>
               {ETIQUETA_ESTADO[papeleta.estado]}
             </span>
           </div>
         </div>
         <Button
+          theme="light"
           variant="ghost"
           size="sm"
           onClick={() => papeletaService.abrirPDF(papeleta.id)}
@@ -281,7 +280,7 @@ export function DetallePapeletaPage() {
       </div>
 
       {/* Datos principales */}
-      <Card>
+      <Card theme="light">
         <Fila
           label="Solicitante"
           value={
@@ -341,7 +340,7 @@ export function DetallePapeletaPage() {
           <Fila
             label="Token de verificación"
             value={
-              <span className="font-mono font-bold tracking-widest text-emerald-400">
+              <span className="font-mono font-bold tracking-widest text-brand-blue">
                 {papeleta.token}
               </span>
             }
@@ -350,13 +349,13 @@ export function DetallePapeletaPage() {
         {papeleta.motivoRechazo && (
           <Fila
             label="Observación / Rechazo"
-            value={<span className="text-orange-400">{papeleta.motivoRechazo}</span>}
+            value={<span className="text-state-warning-fg">{papeleta.motivoRechazo}</span>}
           />
         )}
         {papeleta.motivoAnulacion && (
           <Fila
             label="Motivo de anulación"
-            value={<span className="text-red-400">{papeleta.motivoAnulacion}</span>}
+            value={<span className="text-state-error-fg">{papeleta.motivoAnulacion}</span>}
           />
         )}
         {papeleta.fechaAnulacion && (
@@ -370,7 +369,7 @@ export function DetallePapeletaPage() {
                 href={papeleta.firmaExternaSvg}
                 target="_blank"
                 rel="noreferrer"
-                className="text-blue-400 underline text-xs"
+                className="text-brand-blue underline text-xs"
               >
                 Ver firma
               </a>
@@ -381,20 +380,21 @@ export function DetallePapeletaPage() {
 
       {/* Bloque A: papeleta bloqueada sin aprobador */}
       {estaBloqueada && (
-        <div className="rounded-xl border border-amber-600/60 bg-amber-900/20 p-4">
+        <div className="rounded-ds-lg border border-state-warning-fg/20 bg-state-warning-bg p-4">
           <div className="flex items-start gap-3">
-            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-amber-400" />
+            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-state-warning-fg" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-300">
+              <p className="text-sm font-semibold text-state-warning-fg">
                 Papeleta bloqueada: sin aprobador asignado
               </p>
-              <p className="mt-1 text-sm text-amber-200/80">
+              <p className="mt-1 text-sm text-content-secondary">
                 {esAdmin
                   ? 'La jerarquía no permitió resolver un aprobador disponible (titular no disponible o sin delegación vigente). Asígnale un aprobador para que pueda continuar.'
                   : 'La jerarquía no permitió resolver un aprobador disponible. El Administrador debe reasignar esta papeleta antes de que pueda aprobarse.'}
               </p>
               {esAdmin && (
                 <Button
+                  theme="light"
                   variant="primary"
                   size="sm"
                   className="mt-3"
@@ -411,7 +411,7 @@ export function DetallePapeletaPage() {
 
       {/* Bloque A: aviso de solo lectura para Vigilante */}
       {esVigilante && !esSolicitante && (
-        <p className="rounded-lg border border-gray-700 bg-gray-800/60 px-4 py-2 text-xs text-gray-400">
+        <p className="rounded-ds-lg border border-line-light bg-surface-card px-4 py-2 text-xs text-content-secondary">
           Perfil Vigilante: esta papeleta es de solo lectura.
         </p>
       )}
@@ -422,6 +422,7 @@ export function DetallePapeletaPage() {
         {esSolicitante &&
           (papeleta.estado === 'PENDIENTE' || papeleta.estado === 'OBSERVADO') && (
             <Button
+              theme="light"
               variant="danger"
               disabled={accionando}
               onClick={() => setModalCancelar(true)}
@@ -431,11 +432,12 @@ export function DetallePapeletaPage() {
           )}
         {esSolicitante && papeleta.estado === 'OBSERVADO' && (
           <Link to={`/papeletas/${papeleta.id}/reenviar`}>
-            <Button variant="secondary">Editar y reenviar</Button>
+            <Button theme="light" variant="secondary">Editar y reenviar</Button>
           </Link>
         )}
         {esSolicitante && papeleta.estado === 'APROBADO' && (
           <Button
+            theme="light"
             variant="secondary"
             disabled={accionando}
             onClick={() =>
@@ -450,6 +452,7 @@ export function DetallePapeletaPage() {
         )}
         {esSolicitante && papeleta.estado === 'ANULACION_SOLICITADA' && (
           <Button
+            theme="light"
             variant="ghost"
             disabled={accionando}
             onClick={() =>
@@ -466,6 +469,7 @@ export function DetallePapeletaPage() {
         {/* Aprobador / Admin */}
         {(esAprobador || esAdmin) && papeleta.estado === 'PENDIENTE' && (
           <Button
+            theme="light"
             variant="secondary"
             disabled={accionando}
             onClick={() =>
@@ -481,6 +485,7 @@ export function DetallePapeletaPage() {
         {(esAprobador || esAdmin) && papeleta.estado === 'EN_REVISION' && (
           <>
             <Button
+              theme="light"
               variant="primary"
               disabled={accionando}
               onClick={() =>
@@ -493,6 +498,7 @@ export function DetallePapeletaPage() {
               <CheckIcon className="h-4 w-4" /> Aprobar
             </Button>
             <Button
+              theme="light"
               variant="secondary"
               onClick={() =>
                 setModalTexto({ isOpen: true, tipo: 'observacion' })
@@ -501,6 +507,7 @@ export function DetallePapeletaPage() {
               <ChatBubbleLeftIcon className="h-4 w-4" /> Observar
             </Button>
             <Button
+              theme="light"
               variant="danger"
               onClick={() => setModalTexto({ isOpen: true, tipo: 'rechazo' })}
             >
@@ -512,6 +519,7 @@ export function DetallePapeletaPage() {
           (papeleta.estado === 'APROBADO' ||
             papeleta.estado === 'ANULACION_SOLICITADA') && (
             <Button
+              theme="light"
               variant="danger"
               onClick={() => setModalTexto({ isOpen: true, tipo: 'anulacion' })}
             >
@@ -547,11 +555,12 @@ export function DetallePapeletaPage() {
             }}
             placeholder="Escribe el motivo…"
             rows={4}
-            className="w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="input-field"
           />
-          {errorTexto && <p className="text-xs text-red-400">{errorTexto}</p>}
+          {errorTexto && <p className="text-xs text-state-error-fg">{errorTexto}</p>}
           <div className="flex justify-end gap-3">
             <Button
+              theme="light"
               variant="ghost"
               onClick={() => {
                 setModalTexto({ isOpen: false, tipo: null });
@@ -562,7 +571,7 @@ export function DetallePapeletaPage() {
             >
               Cancelar
             </Button>
-            <Button variant="primary" onClick={confirmarModal} disabled={accionando}>
+            <Button theme="light" variant="primary" onClick={confirmarModal} disabled={accionando}>
               {accionando ? 'Procesando...' : 'Confirmar'}
             </Button>
           </div>
@@ -578,12 +587,12 @@ export function DetallePapeletaPage() {
         title="Desbloquear papeleta"
       >
         <div className="space-y-3">
-          <p className="text-sm text-gray-300">
+          <p className="text-sm text-content-secondary">
             Asigna un aprobador disponible para la papeleta N° {papeleta.numero}.
             Quedará en estado <strong>Pendiente</strong> y se notificará al solicitante.
           </p>
           <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-300">Aprobador</label>
+            <label className="text-sm font-medium text-content-primary">Aprobador</label>
             <select
               value={aprobadorSeleccionado}
               onChange={(e) =>
@@ -592,7 +601,7 @@ export function DetallePapeletaPage() {
                 )
               }
               disabled={cargandoAprobadores}
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-4 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="input-field"
             >
               <option value="">
                 {cargandoAprobadores ? 'Cargando…' : 'Selecciona un aprobador'}
@@ -612,10 +621,11 @@ export function DetallePapeletaPage() {
             onChange={(e) => setComentarioDesbloqueo(e.target.value)}
             placeholder="Comentario para la trazabilidad (opcional)"
             rows={3}
-            className="w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="input-field"
           />
           <div className="flex justify-end gap-3">
             <Button
+              theme="light"
               variant="ghost"
               disabled={accionando}
               onClick={() => setModalDesbloqueo(false)}
@@ -623,6 +633,7 @@ export function DetallePapeletaPage() {
               Cancelar
             </Button>
             <Button
+              theme="light"
               variant="primary"
               disabled={accionando || !aprobadorSeleccionado}
               onClick={() => void confirmarDesbloqueo()}
@@ -639,14 +650,15 @@ export function DetallePapeletaPage() {
         onClose={() => setModalCancelar(false)}
         title="Cancelar papeleta"
       >
-        <p className="text-sm text-gray-300">
+        <p className="text-sm text-content-secondary">
           ¿Estás seguro de cancelar esta papeleta? No se puede deshacer.
         </p>
         <div className="mt-4 flex justify-end gap-3">
-          <Button variant="ghost" onClick={() => setModalCancelar(false)}>
+          <Button theme="light" variant="ghost" onClick={() => setModalCancelar(false)}>
             No
           </Button>
           <Button
+            theme="light"
             variant="danger"
             disabled={accionando}
             onClick={() => {
