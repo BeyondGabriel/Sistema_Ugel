@@ -1,1742 +1,587 @@
-# SIGPER – Sistema de Gestión de Personal | UGEL Talara
+<div align="center">
 
-Sistema web de gestión de personal para la UGEL Talara, diseñado para una institución de aproximadamente 50 trabajadores y pensado para operar en una red interna (intranet).
+# SIGPER
 
-SIGPER centraliza la gestión de:
+### Sistema de Gestión de Personal · UGEL Talara
 
-- autenticación y usuarios;
-- jefaturas y estructura jerárquica;
-- asistencias y control de presencia;
-- papeletas de permisos;
-- aprobaciones jerárquicas;
-- observación, rechazo, cancelación y anulación de papeletas;
-- visitas y control de gafetes;
-- notificaciones en tiempo real;
-- verificación mediante token;
-- generación de PDF;
-- reportes en Excel;
-- captura y recepción de firmas externas.
+Plataforma web institucional para la gestión del personal de la UGEL Talara: control de asistencias,
+papeletas de permiso con aprobación jerárquica, registro de visitantes, notificaciones en tiempo real
+y reportes institucionales en Excel y PDF.
 
-> **Estado:** sistema funcional en desarrollo activo.
-> Este README describe el estado actual documentado del proyecto y las modificaciones de seguridad implementadas durante la revisión técnica.
+**Backend** `Express · Prisma · MySQL` &nbsp;·&nbsp; **Frontend** `React · Vite · Tailwind` &nbsp;·&nbsp; **Tiempo real** `Socket.IO`
+
+</div>
 
 ---
 
-## Índice
+## Contenido
 
-- [Características](#características)
-- [Roles](#roles)
-- [Arquitectura](#arquitectura)
-- [Autorización (Punto 5)](#autorización-punto-5)
-- [Stack tecnológico](#stack-tecnológico)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
-- [Variables de entorno](#variables-de-entorno)
-- [Acceso inicial](#acceso-inicial)
-- [Seguridad y endurecimiento](#seguridad-y-endurecimiento)
-- [Módulo de autenticación](#módulo-de-autenticación)
-- [Gestión de usuarios y jefaturas](#gestión-de-usuarios-y-jefaturas)
-- [Gestión de asistencias](#gestión-de-asistencias)
-- [Gestión de papeletas](#gestión-de-papeletas)
-- [Aprobación jerárquica](#aprobación-jerárquica)
-- [Revisión y timeout](#revisión-y-timeout)
-- [Anulación de papeletas](#anulación-de-papeletas)
-- [Bloqueos de asistencia](#bloqueos-de-asistencia)
-- [Tokens de verificación](#tokens-de-verificación)
-- [Firmas externas](#firmas-externas)
-- [Gestión de visitas](#gestión-de-visitas)
-- [Notificaciones](#notificaciones)
-- [Reportes y exportaciones](#reportes-y-exportaciones)
-- [Validación de entradas](#validación-de-entradas)
-- [API](#api)
-- [Rutas del frontend](#rutas-del-frontend)
-- [Modelo de datos](#modelo-de-datos)
-- [Jobs periódicos](#jobs-periódicos)
-- [Migraciones](#migraciones)
-- [Scripts disponibles](#scripts-disponibles)
-- [Cambios recientes](#cambios-recientes)
-- [Estado de los puntos críticos](#estado-de-los-puntos-críticos)
-- [Hallazgos transferidos al Punto 6](#hallazgos-transferidos-al-punto-6)
-- [Consideraciones actuales](#consideraciones-actuales)
-- [Licencia](#licencia)
+1. [Stack tecnológico](#1-stack-tecnológico)
+2. [Arquitectura y roles](#2-arquitectura-y-roles)
+3. [Módulos del sistema](#3-módulos-del-sistema)
+4. [Modelo de datos](#4-modelo-de-datos)
+5. [Instalación y despliegue](#5-instalación-y-despliegue)
+6. [API endpoints](#6-api-endpoints)
+7. [Diseño UI](#7-diseño-ui)
+8. [Seguridad](#8-seguridad)
+9. [Estructura del repositorio](#9-estructura-del-repositorio)
+10. [Licencia](#10-licencia)
 
 ---
 
-## Características
+## 1. Stack tecnológico
 
-### Gestión de personal
+### Backend
 
-- Creación y administración de usuarios.
-- Activación y desactivación de cuentas.
-- Asignación de jefatura.
-- Jefe inmediato mediante autorrelación.
-- Encargado temporal.
-- Restricción de usuarios activos para los roles `ADMIN`, `RRHH` y `DIRECTORA`.
+| Componente | Versión | Uso en SIGPER |
+|---|---|---|
+| Node.js + TypeScript | `^5.5.4` | Lenguaje y compilación (`tsc`) |
+| Express | `^4.19.2` | Servidor HTTP y enrutamiento modular |
+| Prisma Client / Prisma CLI | `^5.20.0` | ORM, migraciones y seed |
+| MySQL | 8.x | Base de datos relacional (`DATABASE_URL`) |
+| Zod | `^4.6.4` | Validación estricta de body, query y params |
+| Socket.IO | `^4.7.5` | Notificaciones y eventos en tiempo real |
+| JSON Web Token | `^9.0.2` | Sesiones firmadas (normal 8 h / temporal 15 min) |
+| bcryptjs | `^2.4.3` | Hash de contraseñas |
+| ExcelJS | `^4.4.0` | Exportación de reportes a Excel |
+| PDFKit | `^0.15.0` | Generación de papeletas en PDF |
+| Helmet | `^8.3.0` | Cabeceras de seguridad HTTP |
+| express-rate-limit | `^8.7.0` | Limitación de peticiones en rutas sensibles |
+| Multer / CORS / dotenv | `^1.4.5-lts.1` / `^2.8.5` / `^16.4.5` | Carga de archivos, política de origen y variables de entorno |
 
-### Asistencias
+### Frontend
 
-- Registro de `ENTRADA` y `SALIDA`.
-- Control de hasta 4 ciclos completos por día.
-- Consulta de asistencias.
-- Edición de movimientos.
-- Control de presencia.
-- Bloqueos derivados de papeletas aprobadas.
-- Exportación a Excel.
-
-### Papeletas
-
-- Solicitudes por días u horas.
-- Motivos predefinidos.
-- Aprobación jerárquica.
-- Observación y reenvío.
-- Rechazo.
-- Cancelación.
-- Anulación.
-- Solicitud de anulación.
-- Ventanas temporales de anulación.
-- Token de verificación.
-- Generación de PDF.
-- Firma externa mediante URL.
-- Notificaciones relacionadas con cambios de estado.
-
-### Visitas
-
-- Registro de visitantes.
-- Validación de presencia del trabajador visitado.
-- Registro de entrada y salida.
-- Control de gafetes.
-- Consulta según permisos del usuario.
-- Exportación a Excel.
-- Notificación al trabajador visitado.
-
-### Notificaciones
-
-- Persistencia en MySQL.
-- Notificaciones en tiempo real mediante Socket.IO.
-- Marcado individual como leído.
-- Marcado de todas como leídas.
+| Componente | Versión | Uso en SIGPER |
+|---|---|---|
+| React + React DOM | `^18.3.1` | Interfaz de usuario |
+| Vite | `^5.4.2` | Dev server y build de producción |
+| TypeScript | `^5.5.4` | Tipado estático extremo a extremo |
+| Tailwind CSS | `^3.4.10` | Design System institucional (tokens + clases semánticas) |
+| React Router DOM | `^6.26.1` | Rutas protegidas por rol |
+| Axios | `^1.7.7` | Cliente HTTP con interceptores JWT |
+| Socket.IO Client | `^4.7.5` | Recepción de notificaciones en vivo |
+| Headless UI | `^2.1.5` | Diálogos, listas y transiciones accesibles |
+| Heroicons | `^2.1.5` | Iconografía |
+| PostCSS / Autoprefixer | `^8.4.41` / `^10.4.20` | Pipeline de estilos |
 
 ---
 
-# Roles
+## 2. Arquitectura y roles
 
-El sistema implementa seis roles:
+SIGPER es una aplicación cliente–servidor con tres capas:
 
-| Rol | Descripción general |
+```text
+React SPA (Vite, :5173)  ──HTTP/JSON + WebSocket──▶  Express API (:3001)  ──Prisma──▶  MySQL 8
+        │                                                   │
+        └── Design System (Tailwind)                        └── Socket.IO (salas por usuario y ADMIN)
+```
+
+- **API REST** bajo el prefijo `/api`, protegida globalmente por `authJWT` + `exigirCambioPassword`.
+- **Autorización en dos capas:** `checkRole(...)` en la ruta y control de recurso en el controlador
+  (jerarquía viva + delegaciones vigentes).
+- **Tiempo real:** cada usuario autenticado se une a la sala `usuario:<id>` y los administradores a
+  la sala de ADMIN, que recibe avisos transversales como `papeleta:bloqueada`.
+
+### Los 6 roles
+
+| Rol | Alcance | Responsabilidades principales |
+|---|---|---|
+| **ADMIN** | Global | Configuración integral: usuarios, jefaturas, delegaciones, desbloqueo y reasignación de aprobadores, anulación de papeletas, supervisión total. |
+| **RRHH** | Global | Gestión del personal (alta de usuarios, excepto `ADMIN`), supervisión de asistencias, papeletas y visitas, exportaciones. |
+| **DIRECTORA** | Institucional | Máxima autoridad de la jerarquía: aprueba las papeletas de los jefes, firma sus propias papeletas (auto-aprobación) y consulta asistencias y visitas de toda la institución. Puede delegar en un `JEFE`. |
+| **JEFE** | Su jefatura | Aprueba las papeletas de su equipo, consulta asistencias y visitas de su equipo, puede delegar la aprobación en un `ESPECIALISTA` de su área. |
+| **ESPECIALISTA** | Personal | Solicita papeletas, registra/consulta sus asistencias, ve las visitas que recibió. Puede actuar como encargado de una delegación. |
+| **VIGILANTE** | Puerta | Registra entradas y salidas, control de presencia, alta de visitas y registro de salida, verificación de tokens de papeletas. |
+
+### Jerarquía viva (aprobadores)
+
+El aprobador **no se almacena de forma estática**: se resuelve en cada operación a partir de la
+jerarquía y de las delegaciones vigentes (`papeleta.service.ts`).
+
+| Solicitante | Aprobador natural |
 |---|---|
-| `ADMIN` | Administración global del sistema |
-| `RRHH` | Gestión de recursos humanos y operaciones autorizadas |
-| `DIRECTORA` | Dirección y aprobación de papeletas según jerarquía |
-| `JEFE` | Gestión y aprobación dentro de su ámbito jerárquico |
-| `ESPECIALISTA` | Gestión de sus propios registros y solicitudes |
-| `VIGILANTE` | Registro de asistencias y control de visitas |
+| `ESPECIALISTA`, `VIGILANTE` | Su jefe inmediato (`jefeId`) |
+| `JEFE` | La `DIRECTORA` activa |
+| `RRHH`, `ADMIN` | Su jefe inmediato o, si no tiene, la `DIRECTORA` activa |
+| `DIRECTORA` | Auto-aprobación (firma sus propias papeletas) |
 
-Los roles `ADMIN`, `RRHH` y `DIRECTORA` están sujetos a una regla de negocio que limita a un único usuario activo por cada uno.
+Reglas de resolución:
+
+1. Si el aprobador natural tiene una **delegación vigente**, la papeleta se enruta al **encargado**.
+2. Si el aprobador natural está **inactivo o no disponible** y el solicitante es `JEFE`, la papeleta
+   queda **bloqueada** (`requiereAprobadorEspecial`) y visible para el `ADMIN`.
+3. Si no existe aprobador natural, se aplica el **respaldo de RRHH**; para `JEFE` se marca como bloqueo.
+4. El `ADMIN` puede **desbloquear** la papeleta reasignando un aprobador (`reasignadoPorId`), que
+   queda habilitado aunque no sea el aprobador natural.
+
+### Visibilidad por módulo
+
+| Módulo | `ADMIN` / `RRHH` | `DIRECTORA` | `JEFE` | `ESPECIALISTA` | `VIGILANTE` |
+|---|---|---|---|---|---|
+| **Papeletas** | Todas | Todas | Propias + subordinados directos + las asignadas como aprobador | Propias + las asignadas como aprobador | Todas (control de puerta) |
+| **Asistencias** | Todas | Todas (o solo propias con `alcance=propios`) | Su equipo (él + subordinados) o solo propias | Solo propias | Todas |
+| **Visitas** | Todas | Todas (o solo propias con `alcance=propios`) | Su equipo o solo propias | Solo las que recibió | Todas |
+
+El parámetro `alcance=propios|equipo` permite a `JEFE` y `DIRECTORA` alternar entre la vista de
+equipo y su propio historial. Los demás roles lo ignoran.
 
 ---
 
-# Arquitectura
+## 3. Módulos del sistema
 
-El proyecto utiliza una arquitectura separada en frontend y backend:
+### 3.1 Autenticación
+
+- **Login** con email y contraseña (`bcryptjs`). Respuesta `401` genérica ante credenciales
+  inválidas, cuentas inexistentes o desactivadas (anti-enumeración).
+- **JWT sin datos sensibles:** el token solo contiene el `id` (y la marca `requiereCambioPassword`
+  cuando aplica). En cada petición, `authJWT` revalida el usuario contra la base de datos y usa el
+  **rol actual**, de modo que un cambio de rol o una desactivación surten efecto de inmediato.
+- **Cambio de contraseña obligatorio:** si `cambioPassword = true`, el login emite un token temporal
+  de **15 minutos** y `exigirCambioPassword` limita la sesión a `cambiar-password` y `mi-perfil`.
+  La sesión normal dura **8 horas**.
+- **Rate limiting:** login `5/15 min`, cambio de contraseña `5/15 min`, verificación de token
+  `10/10 min` y webhook de firma `5/15 min`.
+- **Perfil:** `GET /api/auth/mi-perfil` devuelve los datos de la sesión vigente.
+
+### 3.2 Asistencias
+
+- Registro de movimientos **ENTRADA / SALIDA** con marca de tiempo; se admiten hasta **4 ciclos
+  completos por día** (entrada + salida).
+- Registro y corrección de movimientos por `VIGILANTE` y `ADMIN`, con guardia temporal de ±1 día.
+- **Reloj y presencia en vivo:** pantalla de registro para vigilancia y panel de presencia
+  (`PRESENTE` / `AUSENTE`) para jefaturas, RRHH, Dirección y Administración.
+- **Vistas por alcance:** `Mis Asistencias` (propias), `Asistencias` (equipo o institución según rol)
+  y filtros por usuario, jefatura y rango de fechas.
+- **Bloqueos automáticos:** una papeleta aprobada bloquea los movimientos que se solapan con el
+  permiso (`aplicarBloqueos`), impidiendo registros inconsistentes.
+- **Exportación a Excel** del listado filtrado.
+
+### 3.3 Papeletas
+
+Solicitudes de permiso por **días** (`DIAS`) o por **horas** (`HORAS`, con hora de salida y retorno),
+con numeración única `NNNN-AAAA`.
+
+**Flujo de estados**
 
 ```text
-SIGPER/
-├── backend/
-│   ├── prisma/
-│   │   ├── migrations/
-│   │   ├── schema.prisma
-│   │   └── seed.ts
-│   └── src/
-│       ├── controllers/
-│       ├── middlewares/
-│       ├── routes/
-│       ├── schemas/
-│       ├── services/
-│       ├── sockets/
-│       ├── utils/
-│       ├── app.ts
-│       └── server.ts
-│
-├── frontend/
-│   ├── firma-movil/
-│   └── src/
-│       ├── components/
-│       ├── contexts/
-│       ├── hooks/
-│       ├── pages/
-│       ├── services/
-│       ├── types/
-│       ├── App.tsx
-│       ├── index.css
-│       └── main.tsx
-│
-├── .gitignore
-├── LICENSE
-└── README.md
+                        ┌──────────────┐
+        crear ─────────▶│  PENDIENTE   │◀──────── reenviar ────────┐
+                        └──────┬───────┘                          │
+                               │ iniciar revisión (20 min máx.)   │
+                               ▼                                  │
+                        ┌──────────────┐   observar   ┌───────────┴──┐
+                        │ EN_REVISION  │─────────────▶│  OBSERVADO   │
+                        └──────┬───────┘              └──────────────┘
+                    aprobar    │    rechazar
+                               ▼           ▼
+                        ┌───────────┐  ┌────────────┐
+                        │ APROBADO  │  │ RECHAZADO  │
+                        └─────┬─────┘  └────────────┘
+     solicitud de anulación    │
+                               ▼
+                   ┌──────────────────────┐   anular   ┌──────────┐
+                   │ ANULACION_SOLICITADA │───────────▶│ ANULADO  │
+                   └──────────────────────┘            └──────────┘
+                              cancelar (solicitante) ──▶ CANCELADO
 ```
 
-## Backend
+- **Revisión con timeout:** al abrir una papeleta pasa a `EN_REVISION`; si no se resuelve en
+  **20 minutos**, un job periódico la devuelve a `PENDIENTE` y notifica al aprobador.
+- **Token de verificación:** al aprobar se genera un token de **6 caracteres**; el personal de puerta
+  lo valida en `POST /api/papeletas/verificar-token` (con visibilidad y rate limiting).
+- **Documento PDF** por papeleta y **firma externa** recibida vía webhook autenticado.
+- **Delegaciones de aprobación:** el `ADMIN` registra una delegación temporal de un `JEFE` hacia un
+  `ESPECIALISTA` de su misma jefatura, o de la `DIRECTORA` hacia un `JEFE`. Mientras está vigente
+  (`activo`, `fechaInicio ≤ ahora ≤ fechaFin`), las papeletas del titular se enrutan al encargado,
+  que puede verlas y aprobarlas. Las delegaciones se pueden anular con motivo.
+- **Desbloqueo administrativo:** las papeletas bloqueadas por falta de aprobador quedan visibles para
+  el `ADMIN`, que reasigna un aprobador y registra quién lo hizo (`reasignadoPorId`).
+- **Anulación con ventana temporal:** solicitud de anulación del aprobador, cierre automático de la
+  ventana y recordatorios cada 20 minutos.
 
-El backend expone una API REST con Express y utiliza Prisma como ORM para MySQL.
+### 3.4 Visitas
 
-Las responsabilidades principales están separadas en:
+- Registro de visitantes con **nombre** y **DNI de 8 dígitos**, por `VIGILANTE` o `ADMIN`.
+- Solo se permite registrar la visita si el trabajador visitado está **presente** en el edificio.
+- Registro de **hora de entrada** y **hora de salida**; historial filtrable por fechas, trabajador
+  visitado y registrador.
+- Control de acceso digital: la identificación del visitante se gestiona íntegramente en el registro
+  (no se emiten credenciales físicas).
+- Exportación del historial a Excel.
 
-- `controllers`: procesamiento de solicitudes HTTP;
-- `routes`: definición de endpoints;
-- `middlewares`: autenticación, autorización, rate limiting y validación;
-- `schemas`: esquemas de validación con Zod;
-- `services`: reglas de negocio;
-- `sockets`: comunicación Socket.IO;
-- `utils`: utilidades compartidas.
+### 3.5 Notificaciones
 
-## Frontend
+- Notificaciones persistentes por usuario (`Notificacion`) con estado leído/no leído.
+- Entrega en tiempo real mediante **Socket.IO** a la sala `usuario:<id>`.
+- Campanita en el layout con contador de no leídas, marcado individual y "marcar todas como leídas".
+- Avisos de cambios de papeleta, bloqueos, delegaciones y cierre de ventanas de anulación.
 
-El frontend está desarrollado con React + TypeScript + Vite.
+### 3.6 Reportes
 
-Utiliza:
-
-- React Router para navegación;
-- Context API para autenticación, toast y Socket.IO;
-- Axios para consumir la API;
-- Tailwind CSS para estilos;
-- Headless UI y Heroicons para componentes e interfaz.
-
-## Autorización (Punto 5)
-
-El control de acceso opera de forma **viva de extremo a extremo**: el rol y el estado del usuario se leen de la base de datos en cada petición y la jerarquía de aprobación se revalida en caliente.
-
-```text
-[Usuario autenticado]
-        │  Bearer <JWT>
-        ▼
-[authJWT]                 Verificación de firma/expiración del JWT +
-                          consulta en BD en tiempo real (existe y activo).
-                          Fija req.usuario.rol desde la fila ACTUAL.
-        ▼
-[exigirCambioPassword]    Guard de contraseña obligatoria: bloquea (403)
-                          todo salvo POST /api/auth/cambiar-password y
-                          GET /api/auth/mi-perfil mientras cambioPassword.
-        ▼
-[checkRole(...)]          Middleware de ruta: exige que el rol ACTUAL
-                          esté en la lista permitida.
-        ▼
-[Controlador]             Validación a nivel de recurso (IDOR/BOLA) y
-                          jerarquía VIVA vía esAprobadorVigente() /
-                          usuarioPuedeVerPapeleta().
-        ▼
-[Prisma / MySQL]          Persistencia (solo si la autorización concede).
-```
-
-Componentes clave de la cadena:
-
-| Componente | Archivo | Rol en la cadena |
+| Reporte | Formato | Endpoint |
 |---|---|---|
-| `authJWT` | `backend/src/middlewares/authJWT.ts` | Verifica el JWT y resuelve rol/estado **en BD** por petición. |
-| `exigirCambioPassword` | `backend/src/middlewares/exigirCambioPassword.ts` | Restringe el alcance del token temporal de primer ingreso. |
-| `checkRole` | `backend/src/middlewares/checkRole.ts` | Autorización por rol a nivel de ruta. |
-| `esAprobadorVigente` | `backend/src/services/papeleta.service.ts` | Revalida la jerarquía actual (aprobador vigente) en las transiciones. |
-| `usuarioPuedeVerPapeleta` | `backend/src/services/visibilidadPapeletas.service.ts` | Visibilidad organizacional centralizada (lectura de papeletas y PDF). |
-| `contarAdminsActivos` / `validarJefeAsignable` | `backend/src/controllers/usuario.controller.ts` | Salvaguardas de administración y de integridad jerárquica. |
+| Asistencias | Excel (`.xlsx`) | `GET /api/asistencias/exportar` |
+| Papeletas | Excel (`.xlsx`) | `GET /api/papeletas/exportar` |
+| Visitas | Excel (`.xlsx`) | `GET /api/visitas/exportar` |
+| Papeleta individual | PDF | `GET /api/papeletas/:id/pdf` |
+
+Las exportaciones respetan el mismo criterio de visibilidad y alcance que los listados.
+
+### 3.7 Administración
+
+- **Usuarios:** alta (ADMIN/RRHH), edición, desactivación, asignación de jefe inmediato y de jefatura.
+  Se protege al último `ADMIN` activo y RRHH no puede crear administradores.
+- **Jefaturas:** las cuatro jefaturas oficiales (`Dirección`, `Gestión Pedagógica`,
+  `Unidad de Administración`, `UPDI`) se crean en el seed y no pueden eliminarse; el `ADMIN` puede
+  añadir jefaturas internas.
+- **Delegaciones:** creación y anulación exclusivas del `ADMIN`; consulta para titulares y encargados.
 
 ---
 
-# Stack tecnológico
+## 4. Modelo de datos
 
-| Capa | Tecnología | Versión real (package.json) |
+Definido en `backend/prisma/schema.prisma` sobre MySQL.
+
+| Modelo | Descripción | Campos clave |
 |---|---|---|
-| Runtime | Node.js | 18 o superior |
-| Backend | Express | `^4.19.2` |
-| Lenguaje backend | TypeScript | `^5.5.4` |
-| ORM | Prisma (`@prisma/client`) | `^5.20.0` |
-| Base de datos | MySQL | 8 o superior |
-| Autenticación | jsonwebtoken (JWT) | `^9.0.2` |
-| Hash de contraseñas | bcryptjs | `^2.4.3` |
-| Tiempo real | Socket.IO | `^4.7.5` |
-| Rate limiting | express-rate-limit | `^8.7.0` |
-| Seguridad HTTP | helmet | `^8.3.0` |
-| Validación | Zod | `^4.6.4` |
-| Reportes | ExcelJS | `^4.4.0` |
-| PDF | PDFKit | `^0.15.0` |
-| Uploads HTTP | Multer | `^1.4.5-lts.1` |
-| Frontend | React / React DOM | `^18.3.1` |
-| Lenguaje frontend | TypeScript | `^5.5.4` |
-| Bundler | Vite | `^5.4.2` |
-| Routing | React Router DOM | `^6.26.1` |
-| HTTP client | Axios | `^1.7.7` |
-| Socket (cliente) | socket.io-client | `^4.7.5` |
-| UI | Tailwind CSS | `^3.4.10` |
-| Componentes | Headless UI (`@headlessui/react`) | `^2.1.5` |
-| Iconos | Heroicons (`@heroicons/react`) | `^2.1.5` |
-| Firma externa | Webhook + almacenamiento externo (Supabase) preparado | — |
+| **Usuario** | Personal de la UGEL y su posición en la jerarquía | `email`, `password`, `rol`, `activo`, `cambioPassword`, `nombres`, `apellidos`, `tituloFormal`, `noDisponible`, `jefaturaId`, `jefeId`, `encargadoTemporalId` |
+| **Jefatura** | Área organizacional y su cabeza visible | `nombre`, `descripcion`, `esOficial`, `jefeId` |
+| **Movimiento** | Marca de asistencia | `usuarioId`, `tipo` (`ENTRADA`/`SALIDA`), `timestamp`, `bloqueado` |
+| **Papeleta** | Permiso solicitado y su ciclo de vida | `numero`, `solicitanteId`, `aprobadorId`, `tipoTiempo`, `fechaInicio`, `fechaFin`, `horaSalida`, `horaRetorno`, `motivo`, `estado`, `token`, `fechaRevision`, `requiereAprobadorEspecial`, `reasignadoPorId`, `anuladoPorAdmin`, `firmaExternaSvg` |
+| **Delegacion** | Delegación temporal de la facultad de aprobar | `titularId`, `encargadoId`, `motivo`, `documentoRef`, `fechaInicio`, `fechaFin`, `activo`, `creadoPorId` |
+| **Visita** | Visitante y su permanencia en la sede | `visitanteNombre`, `visitanteDni`, `trabajadorVisitadoId`, `registradorId`, `horaEntrada`, `horaSalida` |
+| **Notificacion** | Aviso persistente para un usuario | `usuarioId`, `mensaje`, `leida`, `fecha` |
+| **TokenVerificacion** | Traza de cada consulta de token | `token`, `papeletaId`, `usuarioConsultanteId`, `fechaConsulta` |
 
-> Las versiones corresponden a las declaradas en `backend/package.json` y `frontend/package.json`. `Node.js` y `MySQL` se indican como requisitos recomendados (ver sección *Requisitos*).
+**Enumeraciones**
+
+| Enum | Valores |
+|---|---|
+| `Rol` | `VIGILANTE`, `ESPECIALISTA`, `JEFE`, `DIRECTORA`, `RRHH`, `ADMIN` |
+| `TipoMovimiento` | `ENTRADA`, `SALIDA` |
+| `TipoTiempo` | `DIAS`, `HORAS` |
+| `EstadoPapeleta` | `PENDIENTE`, `EN_REVISION`, `OBSERVADO`, `APROBADO`, `RECHAZADO`, `CANCELADO`, `ANULADO`, `ANULACION_SOLICITADA` |
+
+Migraciones: el historial consta de **7 migraciones** en `backend/prisma/migrations`, entre ellas la
+del Bloque A (jerarquía, delegaciones, reasignación de aprobadores y ajustes de notificaciones).
 
 ---
 
-# Requisitos
+## 5. Instalación y despliegue
 
-Se recomienda:
+### Requisitos
 
-- Node.js 18 o superior.
-- MySQL 8 o superior.
-- npm.
-- Laragon es opcional y puede utilizarse para desarrollo local en Windows.
+- **Node.js 18+** y npm
+- **MySQL 8.x** en ejecución con una base de datos vacía
+- Puerto `3001` (API) y `5173` (frontend en desarrollo) disponibles
 
-La base de datos está configurada para utilizar MySQL mediante Prisma.
-
----
-
-# Instalación
-
-## 1. Clonar el repositorio
+### 5.1 Clonar e instalar
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
-cd <DIRECTORIO_DEL_REPOSITORIO>
-```
+git clone <url-del-repositorio> Sistema_Ugel
+cd Sistema_Ugel/backend
+npm install
 
-## 2. Instalar dependencias del backend
-
-```bash
-cd backend
+cd ../frontend
 npm install
 ```
 
-## 3. Configurar el backend
+### 5.2 Variables de entorno
 
-Crear:
-
-```text
-backend/.env
-```
-
-Ejemplo:
+**`backend/.env`**
 
 ```env
-DATABASE_URL="mysql://USUARIO:CONTRASEÑA@localhost:3306/NOMBRE_BASE_DATOS"
-JWT_SECRET="CLAVE_SECRETA_SEGURA"
+# Conexión MySQL
+DATABASE_URL="mysql://usuario:password@localhost:3306/sigper"
+
+# Firma de los JWT (obligatorio)
+JWT_SECRET="cadena-larga-y-aleatoria"
+
+# Puerto de la API
 PORT=3001
+
+# Origen permitido por CORS y Socket.IO (obligatorio)
 FRONTEND_ORIGIN="http://localhost:5173"
-WEBHOOK_SECRET="SECRETO_DEL_WEBHOOK"
+
+# Secreto compartido del webhook de firma externa
+WEBHOOK_SECRET="cadena-larga-y-aleatoria"
 ```
 
-No publiques valores reales de estas variables en GitHub.
+> `FRONTEND_ORIGIN` y `JWT_SECRET` no tienen valor por defecto: la API no arranca / no autentica si
+> faltan.
 
-## 4. Crear/aplicar la base de datos
-
-```bash
-npm run prisma:migrate
-```
-
-## 5. Ejecutar el seed
-
-```bash
-npm run prisma:seed
-```
-
-## 6. Iniciar backend
-
-```bash
-npm run dev
-```
-
-El backend queda disponible, por defecto, en:
-
-```text
-http://localhost:3001
-```
-
-Health check:
-
-```text
-GET http://localhost:3001/api/health
-```
-
-## 7. Instalar dependencias del frontend
-
-Desde la raíz:
-
-```bash
-cd frontend
-npm install
-```
-
-## 8. Iniciar frontend
-
-```bash
-npm run dev
-```
-
-Por defecto:
-
-```text
-http://localhost:5173
-```
-
----
-
-# Variables de entorno
-
-## Backend
-
-| Variable | Uso |
-|---|---|
-| `DATABASE_URL` | Cadena de conexión de Prisma/MySQL |
-| `JWT_SECRET` | Firma y validación de tokens JWT |
-| `PORT` | Puerto HTTP del backend; por defecto `3001` |
-| `FRONTEND_ORIGIN` | Origen autorizado para CORS |
-| `WEBHOOK_SECRET` | Protección del endpoint de firma externa |
-
-## Frontend
-
-La aplicación utiliza la URL configurada para comunicarse con el backend, por ejemplo:
+**`frontend/.env`**
 
 ```env
 VITE_API_URL=http://localhost:3001/api
 ```
 
----
+En desarrollo, Vite además redirige `/api` y `/socket.io` a `http://localhost:3001` (`vite.config.ts`).
 
-# Acceso inicial
-
-El seed crea las jefaturas iniciales y un usuario administrador.
-
-Correo inicial:
-
-```text
-admin@ugeltalara.gob.pe
-```
-
-La contraseña se genera aleatoriamente cuando el administrador todavía no existe y se muestra en la consola durante el seed.
-
-El usuario se crea con:
-
-```text
-rol = ADMIN
-activo = true
-cambioPassword = true
-```
-
-Por ello, el primer ingreso requiere cambiar la contraseña.
-
-La contraseña nueva debe cumplir las reglas de validación definidas por el backend, incluyendo:
-
-- mínimo 8 caracteres;
-- al menos un número;
-- al menos un símbolo.
-
-Las contraseñas se almacenan mediante `bcryptjs`.
-
----
-
-# Seguridad y endurecimiento
-
-Esta sección resume los principales cambios aplicados durante la revisión técnica.
-
-## 1. Revalidación de sesión y JWT
-
-El backend ya no depende exclusivamente del contenido del JWT para autorizar una solicitud protegida.
-
-En cada solicitud autenticada se:
-
-1. verifica la firma y vigencia del JWT;
-2. obtiene el `id` del usuario;
-3. consulta el usuario actual en la base de datos;
-4. comprueba que exista y esté activo;
-5. utiliza el rol actual almacenado en la base de datos.
-
-El JWT normal contiene únicamente la identidad mínima necesaria (`id`).
-
-Los tokens temporales para el cambio obligatorio de contraseña incluyen además la marca correspondiente de cambio de contraseña.
-
-### Efectos
-
-- Un usuario desactivado deja de poder consumir endpoints protegidos aunque conserve un JWT válido temporalmente.
-- Un cambio de rol se refleja sin necesidad de cerrar sesión y volver a iniciar sesión.
-- El frontend limpia la sesión cuando recibe un `401` por token inválido, expirado o usuario desactivado.
-
-Socket.IO también valida la existencia, actividad y rol actual del usuario durante el handshake autenticado.
-
----
-
-## 2. CORS restringido
-
-La configuración anterior basada en origen abierto fue reemplazada por un origen configurable.
-
-Variable utilizada:
-
-```env
-FRONTEND_ORIGIN="http://localhost:5173"
-```
-
-Express utiliza esta variable para la política CORS y Socket.IO utiliza la misma configuración de origen autorizado.
-
-Esto mantiene permitido el frontend actual sin mantener una política de origen abierta de forma general.
-
----
-
-## 3. Rate limiting
-
-Se incorporó `express-rate-limit` para limitar endpoints sensibles.
-
-### Login
-
-```text
-5 intentos / 15 minutos por IP
-```
-
-Endpoint:
-
-```http
-POST /api/auth/login
-```
-
-### Verificación de token
-
-```text
-10 intentos / 10 minutos por IP
-```
-
-Endpoint:
-
-```http
-POST /api/papeletas/verificar-token
-```
-
-Cuando se alcanza el límite, el backend responde con HTTP `429` y un mensaje específico.
-
----
-
-## 4. Validación de entradas
-
-Se incorporó **Zod 4** junto con un middleware centralizado de validación:
-
-```text
-backend/src/middlewares/validate.ts
-```
-
-Los esquemas se organizan en:
-
-```text
-backend/src/schemas/
-├── auth.schema.ts
-├── usuario.schema.ts
-├── papeleta.schema.ts
-├── asistencia.schema.ts
-├── visita.schema.ts
-├── notificacion.schema.ts
-├── jefatura.schema.ts
-└── firmaExterna.schema.ts
-```
-
-La validación se aplica a `body`, `params` y `query` según corresponda.
-
-### Arquitectura de validación (Punto 4)
-
-Toda entrada externa recorre un único flujo seguro antes de alcanzar la lógica de negocio:
-
-```text
-[Request del Cliente]
-        │  (body / params / query)
-        ▼
-[Middleware validate()]                 backend/src/middlewares/validate.ts
-        │  schema.safeParse(req[fuente])
-        ├── ✗ inválido ─► HTTP 400 { mensaje, errores }  (detalle por campo)
-        ▼
-[Esquema Zod: .strict() / .superRefine() / .refine()]
-        │  válido ─► req[fuente] = resultado.data  (datos normalizados)
-        ▼
-[Controlador con tipado seguro: z.infer<typeof schema>]
-```
-
-**El middleware `validate(schema, fuente)`:**
-
-- Recibe el esquema Zod y la fuente a validar (`'body'`, `'params'` o `'query'`).
-- Ejecuta `schema.safeParse(req[fuente])`.
-- Si la validación falla, responde HTTP `400` con `{ mensaje: 'Los datos enviados no son válidos', errores }`, donde `errores` agrupa el primer mensaje por campo a partir de `issue.path`.
-- Si la validación es correcta, **reemplaza** `req[fuente]` con los datos ya validados y normalizados (`resultado.data`) y continúa al controlador.
-
-**Consumo en los controladores (tipado seguro):**
-
-- Los controladores **no revalidan** la entrada; confían en los datos que dejó el middleware y los tipan con el tipo inferido del esquema.
-- `body`: `const { ... } = req.body as z.infer<typeof schema>;`
-- `params` / `query`: `const { ... } = req.params as unknown as z.infer<typeof schema>;`
-
-**Rol de cada mecanismo de Zod en los esquemas:**
-
-- `.strict()`: rechaza campos no contemplados por el contrato (evita propiedades extra). Presente en todos los esquemas del proyecto.
-- `.superRefine()`: reglas de negocio condicionales y de coherencia (por ejemplo, obligatoriedad de campos según `tipoTiempo` en papeletas y orden de fechas en filtros).
-- `.refine()`: validaciones de contenido puntuales (formato/validez de fechas y timestamps; protocolo `https` y host permitido en `svgUrl`).
-
-### Criterios generales
-
-- IDs: enteros positivos.
-- Enumeraciones: únicamente valores definidos por el sistema.
-- Booleanos: valores booleanos válidos.
-- Fechas: formato y calendario válidos donde corresponde.
-- Fechas y horas ISO: se admiten cuando ese es el formato real utilizado por el frontend.
-- Strings: no vacíos cuando son obligatorios y con límites de longitud.
-- Objetos: se utilizan esquemas estrictos cuando corresponde para rechazar campos no contemplados.
-- Errores: respuesta uniforme mediante HTTP `400` con `mensaje` y detalle por campo.
-
-### Validaciones específicas
-
-#### Autenticación
-
-Se validan:
-
-```text
-email
-password
-passwordActual
-nuevaPassword
-```
-
-#### Usuarios
-
-Se validan:
-
-```text
-email
-password
-rol
-nombres
-apellidos
-jefaturaId
-jefeId
-activo
-usuarioId
-```
-
-además de los parámetros y filtros correspondientes.
-
-#### Papeletas
-
-Se validan:
-
-```text
-tipoTiempo
-fechaInicio
-fechaFin
-horaSalida
-horaRetorno
-motivo
-motivoOtros
-motivoRechazo
-comentario
-motivoAnulacion
-id
-estado
-solicitanteId
-token
-```
-
-El token de verificación debe tener exactamente 6 caracteres del conjunto utilizado por el generador de tokens.
-
-#### Asistencias
-
-Se validan:
-
-```text
-usuarioId
-tipo
-timestamp
-nuevoTimestamp
-nuevoTipo
-fechaInicio
-fechaFin
-jefaturaId
-id
-```
-
-#### Visitas
-
-Se validan:
-
-```text
-visitanteNombre
-visitanteDni
-trabajadorVisitadoId
-gafeteEntregado
-fechaInicio
-fechaFin
-registradorId
-id
-```
-
-El DNI se valida como una cadena de 8 dígitos.
-
-#### Notificaciones
-
-Se validan:
-
-```text
-soloNoLeidas
-id
-```
-
-#### Jefaturas
-
-Se validan:
-
-```text
-nombre
-descripcion
-id
-```
-
-#### Firma externa
-
-Se validan:
-
-```text
-papeletaId
-svgUrl
-```
-
-El esquema `webhookFirmaSchema` valida la **estructura** (`papeletaId`, `svgUrl`) y además el **contenido** de `svgUrl`: exige protocolo `https` y, cuando `SUPABASE_URL` está configurado, que el host corresponda al dominio de almacenamiento permitido o a un subdominio suyo. Los esquemas inseguros (`javascript:`, `data:`, `file:`, `http:`) se rechazan.
-
-En el Punto 5 se implementó la **comparación del secreto en tiempo constante** (`crypto.timingSafeEqual`) y el bloqueo de firma en papeletas `ANULADO`/`CANCELADO`. El endurecimiento remanente del webhook (**rate limiting**, **firma HMAC del cuerpo** y **`timestamp`/`nonce` anti-replay**) se mantiene como preocupación independiente del Punto 6; ver la sección *Hallazgos transferidos al Punto 6*.
-
-### Estado de módulos verificados
-
-Durante la auditoría del Punto 4 se revisaron las rutas de entrada de los siguientes módulos, se enlazaron a middleware `validate()` con esquemas Zod `.strict()` y se depuró el código muerto de validación (comprobaciones `Number.isNaN`, parseos y comprobaciones manuales duplicadas) de los controladores revisados:
-
-| Módulo | Fuentes validadas | Estado |
-|---|---|---|
-| Autenticación (`auth`) | `body` (login, cambio de contraseña) | ✅ Blindado y depurado |
-| Usuarios (`usuarios`) | `body`, `params`, `query` | ✅ Blindado y depurado |
-| Jefaturas (`jefaturas`) | `body`, `params` | ✅ Blindado y depurado |
-| Asistencias (`asistencias`) | `body`, `params`, `query` | ✅ Blindado y depurado |
-| Papeletas (`papeletas`) | `body`, `params`, `query` | ✅ Blindado y depurado |
-| Visitas (`visitas`) | `body`, `params`, `query` | ✅ Blindado y depurado |
-| Notificaciones (`notificaciones`) | `query`, `params` | ✅ Blindado y depurado |
-| Firma externa (`firmas/webhook`) | `body` | ✅ Blindado (estructura + contenido) |
-
-Nota de alcance: las rutas de todos estos módulos ya están validadas por `validate()` y sus esquemas rechazan entradas inválidas con HTTP `400`. La depuración de código muerto se aplicó sobre los controladores revisados; algunos manejadores auxiliares (por ejemplo, las rutas de anulación y de PDF bajo `papeletas`, y las exportaciones de reportes) todavía conservan comprobaciones manuales redundantes que el middleware ya cubre.
-
-### Estado de módulos blindados (Punto 5)
-
-La auditoría del **Punto 5 (Roles y Autorización)** verificó el control de acceso **a nivel de recurso** de cada módulo. Matriz de cierre:
-
-| Módulo | Estado | Evidencia de blindaje |
-|---|---|---|
-| **Auth** | ✅ Blindado | Login unificado con `401` genérico (anti-enumeración de cuentas) y **rate limiting** acoplado a `cambiar-password`. Guard `exigirCambioPassword` sobre el token temporal de primer ingreso. |
-| **Usuarios** | ✅ Blindado | Helper de salvaguarda que impide dejar **0 ADMINs activos**; restricciones a **RRHH** (no crear `ADMIN`, no asignar `jefeId`) para impedir escaladas de privilegios; validación **anti-self / jefe-inactivo** en jefaturas; **proyección mínima selectiva** para el rol **VIGILANTE** (PII protegida). |
-| **Papeletas y Visibilidad** | ✅ Blindado | Eliminación del **oráculo de tokens** en `verificar-token` (servicio de visibilidad combinado con roles verificadores), sin eco del token y con filtrado de estados no vigentes; **validación dinámica de aprobadores vigentes** (`esAprobadorVigente`) en `revisar/aprobar/rechazar/observar/anular`; **DRY** aplicado en la generación de PDF. |
-| **Asistencias y Visitas** | ✅ Blindado | `checkRole` inyectado en las lecturas como **defensa en profundidad estructural**; guardia temporal de **±1 día** en los registros de portería; control estricto a nivel de recurso (`esAdmin \|\| registradorId`) en la marcación de gafetes. |
-
----
-
-# Módulo de autenticación
-
-## Login
-
-```http
-POST /api/auth/login
-```
-
-El login devuelve un JWT.
-
-Si el usuario tiene pendiente el cambio inicial de contraseña, recibe un token temporal.
-
-### Duración de tokens
-
-Token temporal:
-
-```text
-15 minutos
-```
-
-Sesión normal:
-
-```text
-8 horas
-```
-
-Las rutas protegidas reciben:
-
-```http
-Authorization: Bearer <TOKEN>
-```
-
-El frontend conserva actualmente el token en `localStorage`.
-
-## Cambio obligatorio de contraseña
-
-```http
-POST /api/auth/cambiar-password
-```
-
-Permite completar el cambio inicial y después cerrar la sesión temporal para exigir un login normal.
-
-## Perfil
-
-```http
-GET /api/auth/mi-perfil
-```
-
-Devuelve la información actual del usuario autenticado.
-
----
-
-# Gestión de usuarios y jefaturas
-
-## Usuarios
-
-El sistema permite:
-
-- crear usuarios;
-- editar usuarios;
-- desactivar usuarios;
-- consultar información;
-- asignar jefaturas;
-- establecer jefe inmediato;
-- establecer encargado temporal.
-
-Los usuarios mantienen información de identificación, rol, estado, jefatura y relaciones jerárquicas.
-
-## Jefaturas
-
-El sistema permite:
-
-- listar jefaturas;
-- crear jefaturas;
-- editar jefaturas;
-- eliminar jefaturas sin usuarios asociados.
-
-Las operaciones de escritura están restringidas a `ADMIN`.
-
----
-
-# Gestión de asistencias
-
-Los movimientos disponibles son:
-
-```text
-ENTRADA
-SALIDA
-```
-
-## Registro
-
-```http
-POST /api/asistencias
-```
-
-El registro operativo está destinado a `VIGILANTE` y `ADMIN`.
-
-## Límite diario
-
-El sistema limita a cuatro ciclos completos de entrada/salida por día.
-
-Un ciclo corresponde a:
-
-```text
-ENTRADA → SALIDA
-```
-
-Una `SALIDA` puede registrarse incluso si no existe una entrada previa, contemplando una omisión de marcado.
-
-## Edición
-
-```http
-PUT /api/asistencias/:id
-```
-
-`VIGILANTE` puede editar movimientos dentro de la ventana permitida por la lógica del sistema.
-
-`ADMIN` dispone de permisos ampliados.
-
-## Consulta
-
-```http
-GET /api/asistencias
-```
-
-Permite aplicar filtros por:
-
-- usuario;
-- fecha inicial;
-- fecha final;
-- jefatura.
-
-## Presencia
-
-```http
-GET /api/asistencias/presencia
-```
-
-El sistema determina:
-
-```text
-PRESENTE
-AUSENTE
-```
-
-según el último movimiento registrado durante el día.
-
----
-
-# Gestión de papeletas
-
-Las papeletas representan permisos de ausencia o salida del personal.
-
-## Tipos
-
-```text
-DIAS
-HORAS
-```
-
-### DIAS
-
-Utiliza:
-
-```text
-fechaInicio
-fechaFin
-```
-
-### HORAS
-
-Utiliza:
-
-```text
-fechaInicio
-fechaFin
-horaSalida
-horaRetorno
-```
-
-## Motivos
-
-El sistema utiliza motivos predefinidos y permite información adicional cuando corresponde el motivo `Otros`.
-
-## Flujo de estados
-
-Los estados definidos son:
-
-```text
-PENDIENTE
-EN_REVISION
-OBSERVADO
-APROBADO
-RECHAZADO
-CANCELADO
-ANULADO
-ANULACION_SOLICITADA
-```
-
-Flujo general:
-
-```text
-PENDIENTE
-   │
-   ▼
-EN_REVISION
-   ├─────────────► RECHAZADO
-   │
-   ├─────────────► APROBADO
-   │                 │
-   │                 └──► ANULACION_SOLICITADA ──► ANULADO
-   │
-   └─────────────► OBSERVADO ──► REENVÍO ──► PENDIENTE
-```
-
-También existen transiciones de cancelación según las reglas de negocio.
-
----
-
-# Aprobación jerárquica
-
-El aprobador se determina según el rol del solicitante y su estructura organizacional.
-
-| Solicitante | Flujo de aprobación |
-|---|---|
-| `DIRECTORA` | Autoaprobación según lógica de negocio |
-| `ESPECIALISTA` | Jefe inmediato |
-| `JEFE` | Directora |
-| `VIGILANTE` | RRHH |
-| `RRHH` | Según la estructura configurada |
-| `ADMIN` | Según la estructura configurada |
-
-Si no existe un aprobador válido, la operación se rechaza.
-
----
-
-# Revisión y timeout
-
-Cuando un aprobador comienza a revisar una papeleta:
-
-```text
-PENDIENTE → EN_REVISION
-```
-
-Se registra:
-
-```text
-fechaRevision
-```
-
-La ventana máxima de revisión es:
-
-```text
-20 minutos
-```
-
-Si el tiempo se supera:
-
-```text
-EN_REVISION → PENDIENTE
-```
-
----
-
-# Anulación de papeletas
-
-Una papeleta aprobada puede entrar en un flujo de anulación.
-
-Estados utilizados:
-
-```text
-APROBADO
-    ↓
-ANULACION_SOLICITADA
-    ↓
-ANULADO
-```
-
-Las reglas de tiempo dependen del tipo de papeleta y de la lógica de negocio del sistema.
-
-El administrador dispone de permisos especiales para anular.
-
----
-
-# Bloqueos de asistencia
-
-Una papeleta en estado:
-
-```text
-APROBADO
-```
-
-puede bloquear el registro de asistencia correspondiente al periodo autorizado.
-
-## DIAS
-
-El bloqueo cubre:
-
-```text
-fechaInicio → fechaFin
-```
-
-## HORAS
-
-El bloqueo cubre:
-
-```text
-horaSalida → horaRetorno
-```
-
-El bloqueo se determina dinámicamente a partir de las papeletas aprobadas.
-
-Cuando una papeleta deja de estar aprobada, deja de producir el bloqueo correspondiente.
-
----
-
-# Tokens de verificación
-
-Las papeletas aprobadas pueden recibir un token de verificación único.
-
-Endpoint:
-
-```http
-POST /api/papeletas/verificar-token
-```
-
-El token se registra y las consultas se auditan mediante:
-
-```text
-TokenVerificacion
-```
-
-La validación HTTP exige exactamente seis caracteres del alfabeto definido por el generador de tokens.
-
----
-
-# Firmas externas
-
-El backend recibe la referencia de una firma externa mediante:
-
-```http
-POST /api/firmas/webhook
-```
-
-El request esperado contiene:
-
-```json
-{
-  "papeletaId": 123,
-  "svgUrl": "https://..."
-}
-```
-
-La petición usa el header:
-
-```http
-x-webhook-secret: <WEBHOOK_SECRET>
-```
-
-El modelo `Papeleta` dispone de:
-
-```text
-firmaExternaSvg
-```
-
-para almacenar la URL o referencia de la firma.
-
-## Firma móvil
-
-Existe una página independiente en:
-
-```text
-frontend/firma-movil/
-```
-
-Permite:
-
-- dibujar con mouse;
-- dibujar mediante pantalla táctil;
-- limpiar la firma;
-- generar un SVG;
-- visualizar la firma;
-- descargar el SVG.
-
----
-
-# Gestión de visitas
-
-## Registro
-
-```http
-POST /api/visitas
-```
-
-El sistema registra:
-
-- nombre del visitante;
-- DNI;
-- trabajador visitado;
-- registrador;
-- hora de entrada;
-- gafete entregado.
-
-Antes de registrar una visita se comprueba que el trabajador visitado se encuentre presente según la lógica de asistencia.
-
-## Salida
-
-```http
-PUT /api/visitas/:id/salida
-```
-
-Registra la hora de salida.
-
-## Gafete
-
-```http
-PUT /api/visitas/:id/gafete
-```
-
-Actualiza el estado de entrega del gafete.
-
-## Consulta
-
-```http
-GET /api/visitas
-GET /api/visitas/:id
-```
-
-Los resultados se restringen según el rol del usuario y los filtros recibidos.
-
----
-
-# Notificaciones
-
-Las notificaciones utilizan dos mecanismos.
-
-## Persistencia
-
-Se almacenan en:
-
-```text
-Notificacion
-```
-
-en MySQL.
-
-## Tiempo real
-
-Socket.IO utiliza salas individuales:
-
-```text
-usuario:<id>
-```
-
-Cuando se genera una notificación:
-
-```text
-1. Se guarda en MySQL.
-2. Se emite mediante Socket.IO.
-3. El frontend puede mostrarla inmediatamente.
-```
-
-Endpoints:
-
-```http
-GET /api/notificaciones
-PUT /api/notificaciones/:id/leer
-PUT /api/notificaciones/leer-todas
-```
-
----
-
-# Reportes y exportaciones
-
-El backend genera archivos `.xlsx` utilizando ExcelJS.
-
-## Asistencias
-
-```http
-GET /api/asistencias/exportar
-```
-
-## Visitas
-
-```http
-GET /api/visitas/exportar
-```
-
-## Papeletas
-
-```http
-GET /api/papeletas/exportar
-```
-
-Las exportaciones utilizan los mismos criterios de filtrado temporal definidos por cada módulo.
-
----
-
-# Validación de entradas
-
-La validación HTTP se centraliza mediante:
-
-```text
-backend/src/middlewares/validate.ts
-```
-
-con esquemas separados por dominio.
-
-Cuando una entrada no es válida, la API utiliza el formato:
-
-```json
-{
-  "mensaje": "Los datos enviados no son válidos",
-  "errores": {
-    "campo": "Descripción del error"
-  }
-}
-```
-
-Los controladores conservan las reglas de negocio que dependen de la base de datos o del estado de la operación. Por ejemplo:
-
-- existencia de usuarios, jefaturas o papeletas;
-- permisos sobre recursos concretos;
-- estado de una papeleta;
-- presencia de un trabajador;
-- bloqueos por papeletas;
-- límites operativos;
-- jerarquía de aprobación.
-
----
-
-# API
-
-## Autenticación
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/auth/login` |
-| POST | `/api/auth/cambiar-password` |
-| GET | `/api/auth/mi-perfil` |
-
-## Usuarios
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/usuarios` |
-| POST | `/api/usuarios/asignar-jefe` |
-| GET | `/api/usuarios` |
-| GET | `/api/usuarios/:id` |
-| PUT | `/api/usuarios/:id` |
-| PUT | `/api/usuarios/:id/desactivar` |
-
-## Jefaturas
-
-| Método | Endpoint |
-|---|---|
-| GET | `/api/jefaturas` |
-| POST | `/api/jefaturas` |
-| PUT | `/api/jefaturas/:id` |
-| DELETE | `/api/jefaturas/:id` |
-
-## Asistencias
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/asistencias` |
-| GET | `/api/asistencias` |
-| GET | `/api/asistencias/presencia` |
-| GET | `/api/asistencias/exportar` |
-| PUT | `/api/asistencias/:id` |
-
-## Papeletas
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/papeletas` |
-| GET | `/api/papeletas` |
-| GET | `/api/papeletas/:id` |
-| GET | `/api/papeletas/:id/pdf` |
-| GET | `/api/papeletas/exportar` |
-| POST | `/api/papeletas/verificar-token` |
-| PUT | `/api/papeletas/:id/revisar` |
-| PUT | `/api/papeletas/:id/aprobar` |
-| PUT | `/api/papeletas/:id/rechazar` |
-| PUT | `/api/papeletas/:id/observar` |
-| PUT | `/api/papeletas/:id/cancelar` |
-| PUT | `/api/papeletas/:id/reenviar` |
-| PUT | `/api/papeletas/:id/anular` |
-| POST | `/api/papeletas/:id/solicitar-anulacion` |
-| POST | `/api/papeletas/:id/cancelar-solicitud-anulacion` |
-
-## Visitas
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/visitas` |
-| GET | `/api/visitas` |
-| GET | `/api/visitas/:id` |
-| GET | `/api/visitas/exportar` |
-| PUT | `/api/visitas/:id/salida` |
-| PUT | `/api/visitas/:id/gafete` |
-
-## Notificaciones
-
-| Método | Endpoint |
-|---|---|
-| GET | `/api/notificaciones` |
-| PUT | `/api/notificaciones/:id/leer` |
-| PUT | `/api/notificaciones/leer-todas` |
-
-## Firma externa
-
-| Método | Endpoint |
-|---|---|
-| POST | `/api/firmas/webhook` |
-
-## Health check
-
-```http
-GET /api/health
-```
-
-Respuesta:
-
-```json
-{
-  "estado": "ok"
-}
-```
-
----
-
-# Rutas del frontend
-
-Las principales rutas disponibles son:
-
-```text
-/login
-/cambiar-password
-/dashboard
-
-/usuarios
-/usuarios/nuevo
-/usuarios/:id/editar
-
-/jefaturas
-
-/asistencias
-/asistencias/registro
-/mis-asistencias
-
-/papeletas
-/papeletas/nueva
-/papeletas/:id
-/papeletas/:id/reenviar
-
-/visitas
-/visitas/registro
-
-/notificaciones
-
-/verificar-token
-```
-
-La navegación se encuentra protegida mediante `ProtectedRoute`.
-
----
-
-# Modelo de datos
-
-Prisma define las siguientes entidades principales:
-
-```text
-Usuario
-Jefatura
-Movimiento
-Papeleta
-Visita
-Notificacion
-TokenVerificacion
-```
-
-## Usuario
-
-Representa a cada trabajador o usuario del sistema y mantiene relaciones jerárquicas y operativas.
-
-## Jefatura
-
-Representa una unidad organizacional.
-
-## Movimiento
-
-Representa una marca de asistencia:
-
-```text
-ENTRADA
-SALIDA
-```
-
-## Papeleta
-
-Representa una solicitud de permiso y contiene el flujo de aprobación, anulación, token y firma externa.
-
-## Visita
-
-Representa una visita externa a un trabajador.
-
-## Notificacion
-
-Almacena mensajes destinados a usuarios.
-
-## TokenVerificacion
-
-Registra consultas realizadas sobre tokens de verificación de papeletas.
-
----
-
-# Jobs periódicos
-
-El backend ejecuta tareas periódicas cada 60 segundos.
-
-Actualmente se realizan tres procesos:
-
-### 1. Revisiones vencidas
-
-Busca papeletas `EN_REVISION` cuya revisión superó el límite establecido y las devuelve a `PENDIENTE` cuando corresponde.
-
-### 2. Solicitudes de anulación vencidas
-
-Busca solicitudes `ANULACION_SOLICITADA` cuya ventana temporal terminó y ejecuta la lógica correspondiente.
-
-### 3. Alertas de anulación
-
-Comprueba ventanas próximas a vencer y genera las notificaciones correspondientes.
-
-> Estos procesos se ejecutan dentro del proceso Node.js mediante un temporizador periódico.
-
----
-
-# Migraciones
-
-El proyecto contiene migraciones Prisma para la estructura actual de la base de datos.
-
-Para aplicar migraciones en desarrollo:
+### 5.3 Preparar la base de datos
 
 ```bash
 cd backend
-npm run prisma:migrate
+
+npx prisma generate
+npx prisma migrate deploy     # aplica las migraciones existentes
+npx prisma migrate dev        # alternativa en desarrollo (crea migraciones)
+npm run prisma:seed           # jefaturas oficiales + usuario administrador
 ```
 
----
+El seed crea las jefaturas `Dirección`, `Gestión Pedagógica`, `Unidad de Administración`, `UPDI`
+(oficiales, no eliminables) más las áreas de apoyo, y un usuario `admin@ugeltalara.gob.pe` con
+contraseña aleatoria de 16 caracteres **impresa una sola vez en la consola**. El primer inicio de
+sesión obliga a cambiarla.
 
-# Scripts disponibles
-
-## Backend
+### 5.4 Ejecutar en desarrollo
 
 ```bash
-npm run dev
-npm run build
-npm start
-npm run prisma:migrate
-npm run prisma:seed
+# Terminal 1
+cd backend && npm run dev      # API en http://localhost:3001
+
+# Terminal 2
+cd frontend && npm run dev     # UI en http://localhost:5173
 ```
 
-| Script | Función |
-|---|---|
-| `dev` | Ejecuta el servidor con Nodemon + ts-node |
-| `build` | Compila TypeScript |
-| `start` | Ejecuta la versión compilada |
-| `prisma:migrate` | Ejecuta migraciones de Prisma |
-| `prisma:seed` | Inicializa datos base |
+Comprobación rápida: `GET http://localhost:3001/api/health` → `{ "estado": "ok" }`.
 
-## Frontend
+### 5.5 Build de producción
 
 ```bash
-npm run dev
-npm run build
-npm run preview
+cd backend
+npm run build                  # compila TypeScript en dist/
+npm start                      # node dist/server.js
+
+cd ../frontend
+npm run build                  # genera dist/ estático
+npm run preview                # verificación local del build
 ```
 
----
+El contenido de `frontend/dist` puede servirse con Nginx o Apache; la API debe quedar accesible en
+el mismo origen o detrás de un proxy inverso, y `FRONTEND_ORIGIN` debe apuntar al dominio público.
 
-# Cambios recientes
+### 5.6 Scripts disponibles
 
-## Punto 1 — Revalidación de JWT y sesión
-
-Se implementó la revalidación del usuario autenticado contra la base de datos en cada petición protegida.
-
-Cambios principales:
-
-- el JWT normal contiene únicamente el `id`;
-- el middleware `authJWT` consulta el usuario actual;
-- se rechazan cuentas inexistentes o inactivas;
-- el rol utilizado por autorización es el rol actual de la base de datos;
-- Socket.IO valida la sesión durante el handshake.
-
-Validaciones funcionales realizadas:
-
-- cambio de `ESPECIALISTA` a `RRHH` sin cerrar sesión;
-- cambio inverso de `RRHH` a `ESPECIALISTA` sin cerrar sesión;
-- desactivación de una cuenta durante una sesión activa.
-
-## Punto 2 — CORS
-
-Se sustituyó la configuración de origen abierto por una política configurable mediante:
-
-```env
-FRONTEND_ORIGIN=http://localhost:5173
-```
-
-La misma política se aplica al servidor Express y Socket.IO.
-
-## Punto 3 — Rate limiting
-
-Se incorporó `express-rate-limit` mediante:
-
-```text
-backend/src/middlewares/rateLimit.ts
-```
-
-Configuración actual:
-
-```text
-Login             → 5 / 15 minutos
-Verificar token   → 10 / 10 minutos
-```
-
-Se verificó funcionalmente la respuesta HTTP `429` al superar ambos límites.
-
-## Punto 4 — Validación de entradas
-
-Se incorporó Zod 4 y el middleware:
-
-```text
-backend/src/middlewares/validate.ts
-```
-
-Se añadieron esquemas para:
-
-```text
-auth
-usuarios
-papeletas
-asistencias
-visitas
-notificaciones
-jefaturas
-firmas externas
-```
-
-Se realizaron pruebas funcionales sobre:
-
-- entradas inválidas;
-- IDs no numéricos;
-- IDs negativos;
-- fechas inválidas;
-- enumeraciones inválidas;
-- filtros inválidos;
-- token de verificación con formato incorrecto;
-- bodies incompletos;
-- registro de datos válidos después de incorporar los esquemas.
-
-Los módulos principales continuaron funcionando con datos válidos después de la integración de la validación.
-
-## Punto 5 — Roles y autorización
-
-Se auditaron los tres bloques (**Auth/Usuarios/Jefaturas**, **Papeletas/Visibilidad** y **Asistencias/Visitas/Webhook**) y se corrigieron **18 hallazgos** (1 Crítico, 4 Altos, 9 Medios y 8 Bajos), con 3 transferidos al Punto 6. La compilación del backend se mantiene limpia en `EXITCODE = 0`.
-
-Correcciones principales:
-
-- **Autenticación:** `authJWT` expone `cambioPassword` y un guard global `exigirCambioPassword` restringe el token temporal a `cambiar-password` y `mi-perfil`; `login` responde con `401` genérico; rate limiting en `cambiar-password`; `helmet` + `express.json({ limit: '100kb' })`.
-- **Usuarios:** salvaguarda del **último ADMIN activo**, prohibición de crear `ADMIN` desde **RRHH**, `jefeId` reservado a **ADMIN**, validación anti-self/jefe-inactivo y **proyección mínima para VIGILANTE**.
-- **Papeletas:** `verificar-token` deja de ser un oráculo BOLA (visibilidad + roles verificadores, sin eco del token, sin estados no vigentes) y las transiciones usan **jerarquía viva** (`esAprobadorVigente`); PDF centralizado.
-- **Asistencias/Visitas:** `checkRole` en lecturas, guardia temporal de **±1 día** y control de recurso en `marcarGafete`.
-- **Webhook de firma:** comparación del secreto en **tiempo constante** (`crypto.timingSafeEqual`) y bloqueo de firma en estados `ANULADO`/`CANCELADO`.
-
----
-
-# Estado de los puntos críticos
-
-| Punto | Descripción | Estado |
+| Ubicación | Script | Acción |
 |---|---|---|
-| 1 | Revalidación de JWT y revocación lógica de sesión | ✅ Implementado y probado |
-| 2 | Restricción de CORS | ✅ Implementado y probado |
-| 3 | Rate limiting | ✅ Implementado y probado |
-| 4 | Validación estructurada de entradas | ✅ Implementado y probado |
-| 5 | Revisión de roles y autorización | ✅ Implementado y probado |
-| 6 | Endurecimiento del webhook de firma y revocación de sesiones | ✅ Implementado y probado |
+| `backend` | `npm run dev` | Servidor con `nodemon` + `ts-node` |
+| `backend` | `npm run build` | Compilación TypeScript |
+| `backend` | `npm start` | Ejecuta `dist/server.js` |
+| `backend` | `npm run prisma:migrate` | `prisma migrate dev` |
+| `backend` | `npm run prisma:seed` | Carga de datos iniciales |
+| `frontend` | `npm run dev` | Vite en modo desarrollo |
+| `frontend` | `npm run build` | `tsc` + build de Vite |
+| `frontend` | `npm run preview` | Sirve el build localmente |
 
 ---
 
-# Hallazgos transferidos al Punto 6
+## 6. API endpoints
 
-El **Punto 5 — Roles y Autorización** resolvió la mayoría de los hallazgos de su alcance. El **endurecimiento del webhook de firma** se completó en el **Punto 6 — Seguridad de Webhooks**. Los puntos que aún requieren migración de esquema Prisma (evitar cambios de modelo) se detallan a continuación y permanecen pendientes:
+Todas las rutas cuelgan de `/api`. Salvo login y health, toda petición requiere
+`Authorization: Bearer <token>`.
 
-- **H-07 — Revocación instantánea de sesiones:** inferencia de `tokenVersion` / `passwordChangedAt` en el modelo Prisma para invalidar tokens vigentes al cambiar la contraseña o al requerir el cierre inmediato de sesiones.
-- **B-01 (Remanentes) — ~~Endurecimiento criptográfico del Webhook de firma~~ → [RESUELTO en Punto 6]:** firmas **HMAC-SHA256** del cuerpo, **`timestamp`/`nonce` anti-replay** y **rate limiting** (5 req / 15 min) en `POST /api/firmas/webhook`. La comparación del secreto en tiempo constante se implementó en el Punto 5 y se reforzó en el Punto 6 (residuo **H1-b**).
-- **B-03 (Remanentes) — Auditoría de autor en Asistencias:** inyección de `registradoPorId` / `editadoPorId` en el modelo `Movimiento` (requiere migración de esquema Prisma).
+### Autenticación y sistema
 
-Antecedentes del webhook (dominio original del Punto 6) — **todos resueltos**:
+| Método | Endpoint | Acceso | Descripción |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Público | Inicia sesión; token temporal si debe cambiar contraseña |
+| `POST` | `/api/auth/cambiar-password` | Autenticado | Cambio de contraseña (obligatorio en el primer ingreso) |
+| `GET` | `/api/auth/mi-perfil` | Autenticado | Datos del usuario de la sesión |
+| `GET` | `/api/health` | Público | Estado del servicio |
 
-- **H1 — ~~Comparación no resistente a ataques de temporización~~ → [RESUELTO en Punto 5, reforzado en Punto 6]:** el secreto se compara en tiempo constante. En el Punto 6 se eliminó además el residuo **H1-b** (fuga de longitud del antiguo *early-return*): ahora se calcula un **HMAC-SHA256 de longitud fija (32 bytes)** sobre cada valor y se comparan con `crypto.timingSafeEqual`, de modo que la comparación ya no depende de la longitud de las entradas.
-- **H2 — ~~Ausencia de rate limiting en el webhook~~ → [RESUELTO en Punto 6]:** se inyectó el limitador específico **`rateLimitWebhookFirma`** (**5 peticiones / 15 minutos** por IP, `standardHeaders: 'draft-7'`, `legacyHeaders: false`) como **primer middleware** de `POST /api/firmas/webhook`, antes de `validate(...)` y del controlador.
-- **H3 — ~~Autenticación basada solo en secreto estático (sin HMAC ni anti-replay)~~ → [RESUELTO en Punto 6]:** se implementó un **flujo dual de firma HMAC**: si llegan `x-webhook-signature` + `x-webhook-timestamp` se verifica la firma `HMAC-SHA256(`${timestamp}.${rawBody}`)` sobre el **cuerpo crudo** capturado en `req.rawBody` y se aplica una **ventana anti-replay de 300 segundos** frente a `Date.now()`; si no, se admite la retrocompatibilidad con `x-webhook-secret` (comparación en tiempo constante). La ausencia de credenciales o un fallo de firma responden **HTTP 401**.
-- **H4 (nuevo) — ~~Falta de idempotencia y sobreescritura de firmas~~ → [RESUELTO en Punto 6]:** el webhook ahora valida la **existencia** de la papeleta (**404**), aplica una **whitelist de estado** (solo `APROBADO`; cualquier otro estado responde **409**), es **idempotente por contenido** (misma firma → **200** sin reescribir; firma distinta → **409** evita la sobreescritura) y escribe de forma **atómica y condicional** mediante `updateMany` con guarda de estado `APROBADO` y firma nula.
+### Usuarios, jefaturas y delegaciones
 
-> Con esto quedan **cerrados** los hallazgos del webhook **H1, H1-b, H2, H3 y H4**. Permanecen pendientes **H-07** (revocación instantánea de sesiones) y **B-03** (auditoría de autor en Asistencias), ambos por requerir migración de esquema Prisma.
+| Método | Endpoint | Roles | Descripción |
+|---|---|---|---|
+| `POST` | `/api/usuarios` | ADMIN, RRHH | Crea usuario (RRHH no puede crear ADMIN) |
+| `GET` | `/api/usuarios` | ADMIN, RRHH, VIGILANTE | Lista usuarios (proyección mínima para VIGILANTE) |
+| `GET` | `/api/usuarios/:id` | ADMIN, RRHH | Detalle de usuario |
+| `PUT` | `/api/usuarios/:id` | ADMIN | Edita usuario |
+| `PUT` | `/api/usuarios/:id/desactivar` | ADMIN | Desactiva la cuenta (protege al último ADMIN) |
+| `POST` | `/api/usuarios/asignar-jefe` | ADMIN | Asigna jefe inmediato |
+| `GET` | `/api/jefaturas` | Autenticado | Lista jefaturas y su jefe |
+| `POST` | `/api/jefaturas` | ADMIN | Crea jefatura interna |
+| `PUT` | `/api/jefaturas/:id` | ADMIN | Edita jefatura |
+| `DELETE` | `/api/jefaturas/:id` | ADMIN | Elimina jefatura (no oficial) |
+| `GET` | `/api/delegaciones` | ADMIN, JEFE, DIRECTORA | Lista delegaciones (filtro `soloVigentes`) |
+| `POST` | `/api/delegaciones` | ADMIN | Crea delegación de aprobación |
+| `PUT` | `/api/delegaciones/:id/anular` | ADMIN | Anula una delegación |
+
+### Asistencias
+
+| Método | Endpoint | Roles | Descripción |
+|---|---|---|---|
+| `POST` | `/api/asistencias` | VIGILANTE, ADMIN | Registra `ENTRADA`/`SALIDA` |
+| `PUT` | `/api/asistencias/:id` | VIGILANTE, ADMIN | Corrige un movimiento (±1 día) |
+| `GET` | `/api/asistencias` | Todos los roles | Listado con `alcance=propios\|equipo` y filtros |
+| `GET` | `/api/asistencias/presencia` | VIGILANTE, ADMIN, RRHH, JEFE, DIRECTORA | Presencia del día |
+| `GET` | `/api/asistencias/exportar` | VIGILANTE, ADMIN, RRHH | Exportación a Excel |
+
+### Papeletas
+
+| Método | Endpoint | Roles | Descripción |
+|---|---|---|---|
+| `POST` | `/api/papeletas` | Todos los roles | Crea papeleta (`DIAS` o `HORAS`) |
+| `GET` | `/api/papeletas` | Autenticado | Listado según visibilidad y filtros |
+| `GET` | `/api/papeletas/:id` | Autenticado | Detalle con control de visibilidad |
+| `GET` | `/api/papeletas/:id/pdf` | Autenticado | PDF de la papeleta |
+| `GET` | `/api/papeletas/exportar` | Autenticado | Exportación a Excel |
+| `POST` | `/api/papeletas/verificar-token` | Autenticado | Valida el token de una papeleta aprobada |
+| `PUT` | `/api/papeletas/:id/revisar` | ADMIN, RRHH, DIRECTORA, JEFE | Inicia revisión (`EN_REVISION`) |
+| `PUT` | `/api/papeletas/:id/aprobar` | ADMIN, RRHH, DIRECTORA, JEFE | Aprueba y genera token |
+| `PUT` | `/api/papeletas/:id/observar` | ADMIN, RRHH, DIRECTORA, JEFE | Observa con motivo |
+| `PUT` | `/api/papeletas/:id/rechazar` | ADMIN, RRHH, DIRECTORA, JEFE | Rechaza con motivo |
+| `PUT` | `/api/papeletas/:id/desbloquear` | ADMIN | Reasigna aprobador en papeleta bloqueada |
+| `PUT` | `/api/papeletas/:id/cancelar` | Solicitante | Cancela su solicitud |
+| `PUT` | `/api/papeletas/:id/reenviar` | Solicitante | Reenvía una papeleta observada |
+| `PUT` | `/api/papeletas/:id/anular` | Aprobador / ADMIN | Anula una papeleta aprobada |
+| `POST` | `/api/papeletas/:id/solicitar-anulacion` | Aprobador | Abre la ventana de anulación |
+| `POST` | `/api/papeletas/:id/cancelar-solicitud-anulacion` | Aprobador | Cancela la solicitud de anulación |
+
+### Visitas, notificaciones y firma externa
+
+| Método | Endpoint | Roles | Descripción |
+|---|---|---|---|
+| `POST` | `/api/visitas` | VIGILANTE, ADMIN | Registra visitante (requiere trabajador presente) |
+| `GET` | `/api/visitas` | Todos los roles | Listado con `alcance` y filtros |
+| `GET` | `/api/visitas/:id` | Todos los roles | Detalle de la visita |
+| `PUT` | `/api/visitas/:id/salida` | VIGILANTE, ADMIN | Registra hora de salida |
+| `GET` | `/api/visitas/exportar` | Todos los roles | Exportación a Excel |
+| `GET` | `/api/notificaciones` | Autenticado | Lista notificaciones del usuario |
+| `PUT` | `/api/notificaciones/:id/leer` | Autenticado | Marca una notificación como leída |
+| `PUT` | `/api/notificaciones/leer-todas` | Autenticado | Marca todas como leídas |
+| `POST` | `/api/firmas/webhook` | Secreto `x-webhook-secret` | Recepción de firma externa (rate limit `5/15 min`) |
 
 ---
 
-# Consideraciones actuales
+## 7. Diseño UI
 
-La aplicación continúa en desarrollo y todavía requiere endurecimientos adicionales antes de un despliegue institucional definitivo.
+La interfaz está **100 % migrada** al Design System institucional de **tema claro**
+(navy + amarillo + azul + blanco), definido en `frontend/tailwind.config.js` y
+`frontend/src/index.css`. Ya no queda ninguna pantalla con el tema oscuro anterior.
 
-## CORS en producción
+### Paleta institucional
 
-La variable `FRONTEND_ORIGIN` debe configurarse con el origen real del frontend institucional y no con `localhost` cuando el sistema se publique en el servidor definitivo.
+| Token | Hex | Uso |
+|---|---|---|
+| `brand-navy` | `#0A1D3D` | Sidebar, top bar, títulos |
+| `brand-navyLight` / `navy-light` | `#1E3A5F` | Hover del sidebar |
+| `brand-yellow` | `#F5C518` | Acentos, badges, ítem activo del menú |
+| `brand-yellowDark` / `yellow-dark` | `#D4A800` | Hover del amarillo (nunca como texto) |
+| `brand-blue` | `#2563EB` | Botones primarios y enlaces |
+| `brand-blueHover` / `blue-hover` | `#1D4ED8` | Hover del azul |
+| `surface-bg` | `#F5F7FA` | Fondo del área de contenido |
+| `surface-card` | `#FFFFFF` | Tarjetas y superficies |
+| `content-primary` | `#0F172A` | Texto principal |
+| `content-secondary` | `#64748B` | Texto secundario |
+| `content-tertiary` | `#94A3B8` | Pistas y placeholders |
+| `content-onYellow` / `on-yellow` | `#0A1D3D` | Único color válido sobre amarillo |
+| `line-light` / `line-strong` | `#E2E8F0` / `#CBD5E1` | Bordes |
+| `state-success` | `#E8F8F0` / `#047857` | Fondo / texto de éxito |
+| `state-warning` | `#FEF9E7` / `#8A6D00` | Fondo / texto de advertencia |
+| `state-error` | `#FEE9E9` / `#C81E1E` | Fondo / texto de error |
+| `state-info` | `#E8F3FE` / `#2563EB` | Fondo / texto informativo |
 
-## JWT en frontend
+- **Radios:** `rounded-ds-sm` 6px · `ds-md` 10px · `ds-lg` 14px · `ds-xl` 20px.
+- **Sombras:** `shadow-card`, `shadow-hover`, `shadow-modal`.
+- **Clases semánticas:** `.card`, `.kpi-card`, `.btn-primary|secondary|danger|ghost`, `.input-field`,
+  `.badge-success|warning|error|info`, `.heading-1|2|3`, `.body-text`, `.body-muted`, `.caption`.
+- **Accesibilidad:** todos los pares fondo/texto de las clases semánticas cumplen **WCAG AA**
+  (≥ 4.5:1). Regla dura: sobre `bg-brand-yellow` solo se usa `text-content-onYellow` (nunca blanco).
+- **Demo viva:** la ruta pública `/design-system` documenta tokens, componentes y contrastes.
 
-El frontend conserva actualmente el JWT en `localStorage`. Para escenarios con requisitos superiores de seguridad puede evaluarse un mecanismo basado en cookies `HttpOnly`, `Secure` y `SameSite`.
+### Dashboards por rol
 
-## Rate limiting
+`DashboardPage` selecciona la vista según el rol de la sesión:
 
-El rate limiting actual utiliza el almacenamiento en memoria y la identidad de origen predeterminada de `express-rate-limit`. Para múltiples instancias del backend se deberá evaluar un almacenamiento compartido.
+| Rol | Dashboard | Contenido principal |
+|---|---|---|
+| `ADMIN` | `AdminDashboard` | Usuarios, jefaturas, papeletas bloqueadas, delegaciones |
+| `RRHH` | `RrhhDashboard` | Personal, asistencias y papeletas del día |
+| `DIRECTORA` | `DirectoraDashboard` | Papeletas de jefes pendientes, presencia y ausencias institucionales, delegaciones vigentes |
+| `JEFE` | `JefeDashboard` | Papeletas de su equipo, presencia del equipo, delegaciones |
+| `ESPECIALISTA` | `EspecialistaDashboard` | Sus papeletas, sus asistencias y sus visitas recibidas |
+| `VIGILANTE` | `VigilanteDashboard` | Registro de movimientos, presencia y visitas del día |
 
-## Jobs
+### Pantallas del frontend
 
-Los procesos periódicos se ejecutan dentro del proceso Node.js mediante `setInterval`. Para múltiples instancias del backend deberá evaluarse un scheduler o worker con coordinación para evitar duplicidades.
+| Módulo | Rutas / páginas |
+|---|---|
+| Autenticación | `/login` · `/cambiar-password` |
+| Dashboard | `/dashboard` (6 dashboards por rol) · 404 |
+| Asistencias | `/asistencias/registro` · `/asistencias` · `/mis-asistencias` |
+| Papeletas | `/papeletas` · `/papeletas/nueva` · `/papeletas/:id` · `/papeletas/:id/reenviar` · `/verificar-token` |
+| Visitas | `/visitas` · `/visitas/registro` |
+| Notificaciones | `/notificaciones` |
+| Administración | `/usuarios` · `/usuarios/nuevo` · `/usuarios/:id/editar` · `/jefaturas` · `/delegaciones` |
+| Demo | `/design-system` |
 
-## Concurrencia
-
-La numeración de papeletas y otras operaciones críticas de estado deben seguir siendo revisadas antes de trabajar con cargas concurrentes mayores.
-
-## Auditoría
-
-El sistema registra consultas de tokens, pero una bitácora completa de todas las transiciones de estado puede requerir una implementación específica de auditoría.
-
-## Webhook de firma externa
-
-El webhook pertenece al Punto 4 por su validación estructural. En el Punto 5 se añadió la **comparación del secreto en tiempo constante** (`crypto.timingSafeEqual`) y el bloqueo de firma en estados no vigentes; el endurecimiento restante (**HMAC**, **anti-replay** y **rate limiting**) continúa contemplado en el Punto 6.
-
-## Pruebas automatizadas
-
-El proyecto no incorpora actualmente una suite automatizada completa para todas las reglas de negocio. Las pruebas realizadas durante esta etapa fueron funcionales/manuales.
+Todas las rutas (excepto login, cambio de contraseña y la demo) viven dentro de `ProtectedRoute`,
+que exige sesión activa y aplica el layout con sidebar, top bar y campanita de notificaciones.
 
 ---
 
-# Estado funcional
+## 8. Seguridad
 
-Actualmente se encuentran implementados:
+| Control | Implementación |
+|---|---|
+| Autenticación | JWT firmado con `JWT_SECRET`; `authJWT` revalida usuario, rol, estado y `cambioPassword` en cada petición |
+| Contraseñas | `bcryptjs` (10 rondas); cambio obligatorio en el primer ingreso |
+| Autorización | `checkRole(...)` por ruta + control de recurso (jerarquía viva, delegaciones y visibilidad) |
+| Validación de entrada | Esquemas Zod `.strict()` para body, query y params en todos los módulos |
+| Rate limiting | Login y cambio de contraseña `5/15 min`; verificación de token `10/10 min`; webhook `5/15 min` |
+| Cabeceras | `helmet()` y `express.json({ limit: '100kb' })` |
+| CORS | Origen único configurable mediante `FRONTEND_ORIGIN` (también para Socket.IO) |
+| Webhook de firma | Secreto compartido en cabecera `x-webhook-secret` + rate limiting específico |
+| Socket.IO | Autenticación por JWT en el handshake y salas por usuario/ADMIN |
+| Anti-enumeración | Respuesta `401` genérica en login para cuentas inexistentes, inactivas o con contraseña errónea |
+
+---
+
+## 9. Estructura del repositorio
 
 ```text
-Autenticación              ✓
-Usuarios                   ✓
-Jefaturas                  ✓
-Asistencias                ✓
-Control de presencia       ✓
-Papeletas                  ✓
-Aprobación jerárquica      ✓
-Observación/reenvío         ✓
-Rechazo/cancelación         ✓
-Anulación                  ✓
-Tokens de verificación     ✓
-Generación de PDF          ✓
-Visitas                    ✓
-Notificaciones             ✓
-Socket.IO                  ✓
-Reportes Excel             ✓
-Captura de firma           ✓
-Webhook de firma           ✓
-Rate limiting              ✓
-Validación con Zod         ✓
-CORS restringido            ✓
-Revalidación de JWT        ✓
-Autorización por roles (P5) ✓
-Guard de cambio de contraseña ✓
-Cabeceras seguras (helmet) ✓
+Sistema_Ugel/
+├── backend/
+│   ├── prisma/
+│   │   ├── schema.prisma          # Modelos, enums y relaciones
+│   │   ├── seed.ts                # Jefaturas oficiales + ADMIN inicial
+│   │   └── migrations/            # Historial de migraciones
+│   └── src/
+│       ├── app.ts                 # Configuración de Express
+│       ├── server.ts              # HTTP + Socket.IO + jobs periódicos
+│       ├── controllers/           # auth, usuarios, asistencias, papeletas...
+│       ├── routes/                # 9 routers montados bajo /api
+│       ├── middlewares/           # authJWT, checkRole, validate, rateLimit, exigirCambioPassword
+│       ├── schemas/               # Validación Zod por módulo
+│       ├── services/              # jerarquía, delegaciones, bloqueos, PDF, visibilidad
+│       ├── sockets/               # Salas y emisión de eventos
+│       └── utils/                 # Prisma, fechas, passwords, tokens
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx                # Rutas y providers
+│   │   ├── index.css              # Design System (clases semánticas)
+│   │   ├── components/            # Layout, Sidebar, UI (Button, Card, Input, Modal, Toast)
+│   │   ├── contexts/              # Auth, Socket, Toast
+│   │   ├── pages/                 # 25 páginas por módulo y rol
+│   │   ├── services/              # Clientes Axios por módulo
+│   │   └── types/                 # Tipos compartidos
+│   ├── tailwind.config.js         # Tokens del Design System
+│   └── DESIGN.md                  # Documentación de la paleta y contrastes
+├── implementationplan.md          # Auditorías de seguridad y fases del proyecto
+├── LICENSE
+└── README.md
 ```
 
 ---
 
-# Licencia
+## 10. Licencia
 
-Este proyecto se distribuye bajo la licencia **MIT**.
+Distribuido bajo licencia **MIT**. Consulta [`LICENSE`](./LICENSE) para más detalles.
 
-Consulta el archivo `LICENSE` incluido en el repositorio para conocer los términos completos.
+<div align="center">
 
-```text
-MIT License
+**SIGPER** · Sistema de Gestión de Personal · UGEL Talara
 
-Copyright (c) 2026 UGEL Talara
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files, to deal in the Software
-without restriction, including without limitation the rights to use, copy,
-modify, merge, publish, distribute, sublicense, and/or sell copies of the
-Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+</div>

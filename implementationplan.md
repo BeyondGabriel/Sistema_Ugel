@@ -647,3 +647,123 @@ Fragmento leído (`firmaExterna.controller.ts` L54–74):
 
 El webhook heredó del Punto 5 la **comparación en tiempo constante** (H1 resuelto) y el **bloqueo de `ANULADO`/`CANCELADO`**. Persisten, confirmados sobre el código real, **H2** (ausencia total de rate limiting) y **H3** (secreto estático sin HMAC ni anti-replay), más un **H4** de integridad/idempotencia, y un residuo **H1-b** (fuga de longitud). Continuarán como hallazgos del Punto 6. **No se modificó ningún archivo `.ts`/`.tsx` en este turno.**
 
+---
+
+# Fase 4 — Bloque A (Jerarquía, Delegaciones y Rediseño UI)
+
+> **Registro histórico.** Las fases 1–3 y el Punto 6 se conservan íntegros como evidencia de las
+> auditorías de seguridad. Esta sección documenta el cierre del **Bloque A**: qué se corrigió, qué se
+> añadió y cómo cambia el estado de los hallazgos anteriores.
+
+## 4.1 Corrección de visibilidad (jerarquía real)
+
+**Situación anterior.** La `DIRECTORA` no veía las asistencias ni las visitas de los subordinados de
+cada jefe: su alcance se resolvía como "su propio id + el de los jefes" (`obtenerIdsEquipo`), lo que
+dejaba fuera al personal de las áreas. Era el hallazgo **A-03** de la Fase 2.
+
+**Implementación.**
+
+- `asistencia.controller.ts` → `resolverIdsAsistencia` y `visita.controller.ts` → `resolverIdsVisitados`
+  resuelven el alcance por rol:
+  - `DIRECTORA`: **sin restricción** (`null`) → ve **todas** las asistencias y visitas de la
+    institución; puede limitarse a lo propio con `alcance=propios`.
+  - `JEFE`: **su equipo** (él + subordinados directos vía `obtenerIdsEquipo`), o solo lo propio con
+    `alcance=propios`.
+  - `ESPECIALISTA`: exclusivamente sus movimientos y las visitas que recibió.
+  - `ADMIN`, `RRHH`, `VIGILANTE`: sin restricción.
+- El parámetro `alcance=propios|equipo` se valida con Zod en `asistencia.schema.ts` y
+  `visita.schema.ts` y se expone en las pantallas de asistencias y visitas.
+- **Papeletas:** se mantiene el criterio de `visibilidadPapeletas.service.ts` — global para `ADMIN`,
+  `RRHH`, `DIRECTORA` y `VIGILANTE`; `JEFE` ve propias + subordinados directos + las que tiene
+  asignadas como aprobador; `ESPECIALISTA` ve propias + asignadas como aprobador. El encargado de una
+  delegación ve las papeletas que debe aprobar.
+- `verificar-token`, la descarga de PDF y las exportaciones reutilizan la misma regla de visibilidad.
+
+**Estado:** hallazgo **A-03 resuelto**.
+
+## 4.2 Delegaciones de aprobación
+
+**Modelo nuevo `Delegacion`** (`schema.prisma`):
+
+| Campo | Tipo | Propósito |
+|---|---|---|
+| `titularId` | `Int` | Usuario que delega (JEFE o DIRECTORA) |
+| `encargadoId` | `Int` | Usuario que asume la aprobación |
+| `motivo` | `String?` (1000) | Justificación |
+| `documentoRef` | `String?` (500) | Referencia documental |
+| `fechaInicio` / `fechaFin` | `DateTime` | Ventana de vigencia |
+| `activo` | `Boolean` | Anulación lógica |
+| `creadoPorId` | `Int?` | ADMIN que la registró |
+
+Índices por `titularId`, `encargadoId`, `creadoPorId` y `(activo, fechaInicio, fechaFin)`.
+
+**Lógica dinámica.**
+
+- `delegacion.service.ts` → `obtenerDelegacionVigente(titularId, fecha)` solo considera delegaciones
+  `activo = true`, dentro de la ventana y con encargado `activo` y `noDisponible = false`.
+- `validarEncargadoElegible` y `existeSolapeDelegacion` impiden delegaciones inválidas o solapadas:
+  un `JEFE` delega en un `ESPECIALISTA` de **su misma jefatura**; la `DIRECTORA` delega en un `JEFE`.
+- `papeleta.service.ts` → `resolverAprobadorFinal` aplica la delegación **antes** de asignar el
+  aprobador natural, de modo que la papeleta se enruta al encargado, que puede verla y aprobarla.
+- API: `GET /api/delegaciones` (ADMIN, JEFE, DIRECTORA), `POST /api/delegaciones` y
+  `PUT /api/delegaciones/:id/anular` (solo ADMIN).
+- UI: `DelegacionesPage` para el ADMIN y tarjetas de delegaciones vigentes en los dashboards de
+  JEFE y DIRECTORA.
+- Migraciones: `20261023235500_bloque_a_jerarquia`,
+  `20261024060333_delegacion_activo_documento_ref` y
+  `20261025011302_widen_notificacion_mensaje_delegacion_documento_ref`.
+
+## 4.3 Desbloqueo de papeletas
+
+- Nuevos campos en `Papeleta`: **`requiereAprobadorEspecial`** (la papeleta quedó sin aprobador
+  válido: `BLOQUEO_P1C` / `BLOQUEO_SIN_APROBADOR`) y **`reasignadoPorId`** con la relación
+  `PapeletaReasignadaPor` (`onDelete: SetNull`), que registra al ADMIN que intervino.
+- Endpoint **`PUT /api/papeletas/:id/desbloquear`** (exclusivo `ADMIN`, body validado por
+  `desbloquearPapeletaSchema`): reasigna el aprobador y deja la papeleta operativa.
+- `esAprobadorVigente` acepta al aprobador reasignado aunque no sea el aprobador natural de la
+  jerarquía, sin abrir la puerta a aprobaciones arbitrarias.
+- Las papeletas bloqueadas se notifican a la sala `SALA_ADMIN` (`papeleta:bloqueada`) para que el
+  ADMIN las detecte sin revisar el listado completo.
+- Migración: `20261025035123_add_reasignado_por_id_papeleta`.
+
+## 4.4 Eliminación del módulo de Gafetes
+
+- Se eliminó el módulo completo de gafetes: la operación `marcarGafete`, su ruta, su esquema y el
+  campo de gafete del modelo `Visita`.
+- Migración: `20261025035407_drop_gafete_from_visita`.
+- `Visita` queda con `visitanteNombre`, `visitanteDni` (8 dígitos), `trabajadorVisitadoId`,
+  `registradorId`, `horaEntrada` y `horaSalida`.
+- **El hallazgo B-02 [MEDIO] queda OBSOLETO**: el control de recurso que se reclamaba sobre
+  `marcarGafete` ya no aplica porque la funcionalidad no existe; la salida de visita se registra con
+  `registrarSalida`, que sí valida el recurso y el rol.
+
+## 4.5 Rediseño UI (Design System institucional)
+
+- Se migraron las **20 pantallas** del sistema (25 archivos de página, incluidos los 6 dashboards por
+  rol y la demo `/design-system`) al Design System de **tema claro**: navy `#0A1D3D`, amarillo
+  `#F5C518`, azul `#2563EB`, fondo `#F5F7FA` y tarjetas blancas.
+- Tokens en `frontend/tailwind.config.js` (marca, superficies, texto, líneas, estados, radios `ds-*` y
+  sombras) y clases semánticas en `frontend/src/index.css` (`.card`, `.btn-*`, `.input-field`,
+  `.badge-*`, `.heading-*`).
+- **Dashboards por rol:** `AdminDashboard`, `RrhhDashboard`, `DirectoraDashboard`, `JefeDashboard`,
+  `EspecialistaDashboard` y `VigilanteDashboard`, seleccionados por `DashboardPage` según la sesión.
+- Accesibilidad: pares fondo/texto con contraste **WCAG AA**; prohibido texto blanco sobre amarillo
+  (solo `content-onYellow`). Documentado en `frontend/DESIGN.md`.
+- **Estado:** UI 100 % migrada; no quedan pantallas con el tema oscuro anterior.
+
+## 4.6 Efecto sobre los hallazgos previos
+
+| Hallazgo | Fase | Estado tras el Bloque A |
+|---|---|---|
+| A-02 — Autorización por `aprobadorId` obsoleta | Fase 2 | Mitigado: jerarquía viva (`esAprobadorVigente`) + desbloqueo administrativo |
+| A-03 — La DIRECTORA no ve a los subordinados de cada jefe | Fase 2 | **Resuelto**: alcance institucional en asistencias, visitas y papeletas |
+| A-05 — `verificarToken` devolvía el token y no filtraba estado | Fase 2 | Resuelto en Punto 5 y conservado en el Bloque A |
+| B-02 — `marcarGafete` sin control a nivel de recurso | Fase 3 | **Obsoleto**: módulo de gafetes eliminado |
+| B-05 — Rutas de lectura sin `checkRole` | Fase 3 | **Resuelto**: `checkRole` explícito en asistencias y visitas |
+| H2 — Webhook sin rate limiting | Punto 6 | **Resuelto**: `rateLimitWebhookFirma` (`5/15 min`) aplicado en `/api/firmas/webhook` |
+| H3 / H4 — Secreto estático sin HMAC y sin idempotencia estricta | Punto 6 | Sin cambios en esta fase; siguen documentados como pendientes |
+
+**Resultado:** el Bloque A cierra la brecha de visibilidad de la máxima autoridad, formaliza la
+delegación temporal de aprobación, dota al ADMIN de una vía controlada de desbloqueo y deja el
+producto con una identidad visual institucional única.
+
