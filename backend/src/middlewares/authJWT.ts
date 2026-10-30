@@ -18,6 +18,12 @@ export interface PayloadJWT {
   id: number;
   /** true únicamente en el token temporal de cambio de contraseña */
   requiereCambioPassword?: boolean;
+  /**
+   * H-07: versión del token de sesión con la que fue emitido. Si el usuario
+   * cambia su contraseña, la versión almacenada en la BD se incrementa y los
+   * JWT emitidos con una versión anterior dejan de ser aceptados.
+   */
+  tokenVersion?: number;
 }
 
 /**
@@ -33,6 +39,8 @@ export interface UsuarioAutenticado {
   rol: Rol;
   /** true cuando la cuenta tiene una contraseña pendiente de cambio */
   cambioPassword: boolean;
+  /** H-07: versión actual del token de sesión del usuario en la BD */
+  tokenVersion: number;
   requiereCambioPassword?: boolean;
 }
 
@@ -105,6 +113,7 @@ export async function authJWT(
         rol: true,
         activo: true,
         cambioPassword: true,
+        tokenVersion: true,
       },
     });
 
@@ -120,6 +129,18 @@ export async function authJWT(
     }
 
     /**
+     * H-07: revocación de sesión. Si el token fue emitido con una versión
+     * anterior a la vigente en la BD (por ejemplo, porque el usuario cambió
+     * su contraseña), la sesión queda invalidada. Los tokens sin la marca
+     * `tokenVersion` (emitidos antes de esta funcionalidad) se siguen
+     * aceptando para no romper sesiones activas.
+     */
+    if (payload.tokenVersion !== undefined && payload.tokenVersion !== usuario.tokenVersion) {
+      res.status(401).json({ mensaje: 'Sesión invalidada. Inicie sesión nuevamente.' });
+      return;
+    }
+
+    /**
      * El rol y el email provienen de la BD, no del JWT.
      *
      * `requiereCambioPassword` se conserva únicamente cuando el token
@@ -131,6 +152,7 @@ export async function authJWT(
       email: usuario.email,
       rol: usuario.rol,
       cambioPassword: usuario.cambioPassword,
+      tokenVersion: usuario.tokenVersion,
       ...(payload.requiereCambioPassword === true
         ? { requiereCambioPassword: true }
         : {}),

@@ -92,6 +92,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       const payload: PayloadJWT = {
         id: usuario.id,
         requiereCambioPassword: true,
+        tokenVersion: usuario.tokenVersion,
       };
 
       const tokenTemporal = jwt.sign(payload, secret, {
@@ -116,6 +117,7 @@ export async function login(req: Request, res: Response): Promise<void> {
      */
     const payload: PayloadJWT = {
       id: usuario.id,
+      tokenVersion: usuario.tokenVersion,
     };
 
     const token = jwt.sign(payload, secret, {
@@ -179,6 +181,8 @@ export async function cambiarPassword(req: Request, res: Response): Promise<void
       data: {
         password: nuevaPasswordHasheada,
         cambioPassword: false,
+        // H-07: invalida los JWT emitidos antes del cambio de contraseña.
+        tokenVersion: { increment: 1 },
       },
     });
 

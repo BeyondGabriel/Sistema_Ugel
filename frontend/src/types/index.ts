@@ -82,6 +82,12 @@ export interface Movimiento {
   tipo: TipoMovimiento;
   timestamp: string;
   bloqueado: boolean;
+  /** B-03: usuario que registró el movimiento (auditoría). */
+  registradoPorId?: number | null;
+  /** B-03: usuario que editó el movimiento por última vez (auditoría). */
+  editadoPorId?: number | null;
+  registradoPor?: UsuarioBasico | null;
+  editadoPor?: UsuarioBasico | null;
   usuario?: UsuarioBasico & { jefatura?: Jefatura | null };
 }
 

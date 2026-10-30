@@ -89,6 +89,7 @@ io.use(async (socket: Socket, next) => {
         rol: true,
         activo: true,
         cambioPassword: true,
+        tokenVersion: true,
       },
     });
 
@@ -102,11 +103,19 @@ io.use(async (socket: Socket, next) => {
       return next(new Error('La cuenta del usuario está desactivada'));
     }
 
+    // H-07: revocación de sesión. Un token emitido con una versión anterior
+    // a la vigente en la BD (por ejemplo, tras un cambio de contraseña) ya
+    // no puede abrir una conexión de Socket.IO.
+    if (payload.tokenVersion !== undefined && payload.tokenVersion !== usuario.tokenVersion) {
+      return next(new Error('Sesión invalidada'));
+    }
+
     const usuarioAutenticado: UsuarioAutenticado = {
       id: usuario.id,
       email: usuario.email,
       rol: usuario.rol,
       cambioPassword: usuario.cambioPassword,
+      tokenVersion: usuario.tokenVersion,
       ...(payload.requiereCambioPassword === true
         ? { requiereCambioPassword: true }
         : {}),

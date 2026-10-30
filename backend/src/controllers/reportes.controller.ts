@@ -114,6 +114,9 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
         usuario: {
           include: { jefatura: { select: { nombre: true } } },
         },
+        // B-03: auditoría de autoría de cada movimiento.
+        registradoPor: { select: { nombres: true, apellidos: true } },
+        editadoPor: { select: { nombres: true, apellidos: true } },
       },
       orderBy: [{ usuarioId: 'asc' }, { timestamp: 'asc' }],
     });
@@ -170,6 +173,9 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
       { header: 'Hora Entrada', key: 'horaEntrada', width: 14 },
       { header: 'Hora Salida', key: 'horaSalida', width: 14 },
       { header: 'Estado', key: 'estado', width: 16 },
+      // B-03: columnas de auditoría de asistencias.
+      { header: 'Registrado por', key: 'registradoPor', width: 20 },
+      { header: 'Editado por', key: 'editadoPor', width: 20 },
     ];
 
     estilizarCabecera(hoja.getRow(1), hoja.columns.length);
@@ -188,6 +194,45 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
         const dia = new Date(diaKey + 'T00:00:00');
         const estado = estaJustificado(usuario.id, dia) ? 'Justificado' : 'Presente';
 
+        /**
+         * B-03: auditoría del día.
+         * - Registrador: se toma el primer movimiento del día que tenga
+         *   registrador asociado; si los movimientos del día fueron
+         *   registrados por usuarios distintos se muestra 'Varios'.
+         * - Editor: se toma el primer movimiento del día que tenga editor;
+         *   si hubo editores distintos se muestra 'Varios'.
+         * Cuando no hay dato (movimientos previos a la auditoría) se usa '—'.
+         */
+        const idsRegistradores = new Set(
+          movsDelDia
+            .map((m) => m.registradoPorId)
+            .filter((id): id is number => id !== null),
+        );
+
+        const registradorDelDia = movsDelDia.find((m) => m.registradoPorId !== null);
+
+        const registradoPorTexto =
+          idsRegistradores.size > 1
+            ? 'Varios'
+            : registradorDelDia?.registradoPor
+              ? `${registradorDelDia.registradoPor.nombres} ${registradorDelDia.registradoPor.apellidos}`
+              : '—';
+
+        const idsEditores = new Set(
+          movsDelDia
+            .map((m) => m.editadoPorId)
+            .filter((id): id is number => id !== null),
+        );
+
+        const editorDelDia = movsDelDia.find((m) => m.editadoPorId !== null);
+
+        const editadoPorTexto =
+          idsEditores.size > 1
+            ? 'Varios'
+            : editorDelDia?.editadoPor
+              ? `${editorDelDia.editadoPor.nombres} ${editorDelDia.editadoPor.apellidos}`
+              : '—';
+
         hoja.addRow({
           nombre: usuario.nombres,
           apellidos: usuario.apellidos,
@@ -196,6 +241,8 @@ export async function exportarAsistencias(req: Request, res: Response): Promise<
           horaEntrada: primeraEntrada ? formatearHora(primeraEntrada.timestamp) : '—',
           horaSalida: ultimaSalida ? formatearHora(ultimaSalida.timestamp) : '—',
           estado,
+          registradoPor: registradoPorTexto,
+          editadoPor: editadoPorTexto,
         });
       }
     }

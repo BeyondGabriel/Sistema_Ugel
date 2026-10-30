@@ -190,6 +190,9 @@ export async function registrarMovimiento(req: Request, res: Response): Promise<
         usuarioId,
         tipo,
         timestamp: fechaMovimiento,
+        // B-03: se audita quién registró el movimiento (null si no hay
+        // usuario autenticado en la petición).
+        registradoPorId: req.usuario?.id ?? null,
       },
     });
 
@@ -269,6 +272,8 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
       data: {
         timestamp: nuevaFecha,
         tipo: nuevoTipoFinal,
+        // B-03: se audita quién editó el movimiento por última vez.
+        editadoPorId: req.usuario?.id ?? null,
       },
     });
 

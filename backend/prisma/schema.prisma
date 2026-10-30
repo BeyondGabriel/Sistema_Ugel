@@ -57,6 +57,9 @@ model Usuario {
   rol                 Rol
   activo              Boolean   @default(true)
   cambioPassword      Boolean   @default(true)
+  // H-07: versión de los tokens de sesión emitidos para el usuario. Se
+  // incrementa en cada cambio de contraseña para invalidar los JWT previos.
+  tokenVersion        Int       @default(0)
   nombres             String
   apellidos           String
   foto                String?
@@ -101,6 +104,11 @@ model Usuario {
   // Relación con Movimiento (asistencias)
   movimientos         Movimiento[]
 
+  // B-03: movimientos de asistencia registrados y editados por este usuario
+  // (trazabilidad de autoría de los cambios en asistencias).
+  movimientosRegistrados Movimiento[] @relation("MovimientoRegistradoPor")
+  movimientosEditados    Movimiento[] @relation("MovimientoEditadoPor")
+
   // Relaciones con Visita
   visitasRegistradas  Visita[] @relation("VisitasRegistradas")
   visitasRecibidas    Visita[] @relation("VisitasRecibidas")
@@ -142,6 +150,14 @@ model Movimiento {
   tipo       TipoMovimiento
   timestamp  DateTime
   bloqueado  Boolean        @default(false)
+
+  // B-03: auditoría del movimiento. `registradoPor` es quien lo creó y
+  // `editadoPor` quien lo modificó por última vez (null si nunca se editó).
+  registradoPorId Int?
+  registradoPor   Usuario? @relation("MovimientoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+
+  editadoPorId Int?
+  editadoPor   Usuario? @relation("MovimientoEditadoPor", fields: [editadoPorId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId])
 }
