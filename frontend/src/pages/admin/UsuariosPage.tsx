@@ -88,7 +88,7 @@ export function UsuariosPage() {
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8 text-content-primary">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-xl font-bold text-content-primary">Usuarios</h1>
           <p className="text-sm text-content-secondary">{usuarios.length} resultado(s)</p>
@@ -103,19 +103,19 @@ export function UsuariosPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+      <div className="flex flex-col gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card sm:flex-row sm:flex-wrap sm:items-center">
         <FunnelIcon className="h-4 w-4 text-content-tertiary shrink-0" />
-        <select value={filtroRol} onChange={(e) => setFiltroRol(e.target.value as Rol | '')} className="input-field sm:w-auto">
+        <select value={filtroRol} onChange={(e) => setFiltroRol(e.target.value as Rol | '')} className="input-field w-full sm:w-auto">
           <option value="">Todos los roles</option>
           {(Object.keys(ETIQUETAS_ROL) as Rol[]).map((r) => (
             <option key={r} value={r}>{ETIQUETAS_ROL[r]}</option>
           ))}
         </select>
-        <select value={filtroJefatura} onChange={(e) => setFiltroJefatura(e.target.value ? Number(e.target.value) : '')} className="input-field sm:w-auto">
+        <select value={filtroJefatura} onChange={(e) => setFiltroJefatura(e.target.value ? Number(e.target.value) : '')} className="input-field w-full sm:w-auto">
           <option value="">Todas las jefaturas</option>
           {jefaturas.map((j) => <option key={j.id} value={j.id}>{j.nombre}</option>)}
         </select>
-        <select value={filtroActivo} onChange={(e) => setFiltroActivo(e.target.value as 'true' | 'false' | '')} className="input-field sm:w-auto">
+        <select value={filtroActivo} onChange={(e) => setFiltroActivo(e.target.value as 'true' | 'false' | '')} className="input-field w-full sm:w-auto">
           <option value="true">Solo activos</option>
           <option value="false">Solo inactivos</option>
           <option value="">Todos</option>
@@ -123,8 +123,8 @@ export function UsuariosPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
-        <table className="w-full text-sm">
+      <div className="w-full overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
@@ -154,13 +154,13 @@ export function UsuariosPage() {
                   <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                     {u.nombres} {u.apellidos}
                   </td>
-                  <td className="px-4 py-3 text-content-secondary">{u.email}</td>
+                  <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{u.email}</td>
                   <td className="px-4 py-3">
                     <span className={COLORES_ROL[u.rol]}>
                       {ETIQUETAS_ROL[u.rol]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-content-secondary">{u.jefatura?.nombre ?? '—'}</td>
+                  <td className="px-4 py-3 text-content-secondary whitespace-nowrap">{u.jefatura?.nombre ?? '—'}</td>
                   <td className="px-4 py-3 text-center">
                     {u.activo ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-state-success-fg">

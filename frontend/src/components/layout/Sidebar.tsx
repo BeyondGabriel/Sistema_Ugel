@@ -63,7 +63,14 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  /** Solo aplica en móvil: controla si el drawer está visible. */
+  mobileAbierto?: boolean;
+  /** Se llama al navegar o al tocar el backdrop para cerrar el drawer móvil. */
+  onCerrarMovil?: () => void;
+}
+
+export function Sidebar({ mobileAbierto = false, onCerrarMovil }: SidebarProps) {
   const { user, logout } = useAuth();
   const { pathname } = useLocation();
   const [colapsado, setColapsado] = useState<boolean>(() => {
@@ -82,14 +89,21 @@ export function Sidebar() {
     items: g.items.filter((i) => i.roles.includes(user.rol)),
   })).filter((g) => g.items.length > 0);
 
-  const ancho = colapsado ? 'w-16' : 'w-60';
+  const anchoEscritorio = colapsado ? 'md:w-16' : 'md:w-60';
 
   // Activo también en rutas hijas (/papeletas/12, /usuarios/nuevo, ...)
   const esActivo = (ruta: string) => pathname === ruta || pathname.startsWith(`${ruta}/`);
 
   return (
     <aside
-      className={`flex h-screen ${ancho} shrink-0 flex-col bg-brand-navy text-content-inverse transition-[width] duration-200`}
+      className={[
+        // En móvil (< md) el menú es un drawer superpuesto que se abre con el
+        // botón hamburguesa del Layout; en escritorio vuelve al flujo normal.
+        'fixed inset-y-0 left-0 z-40 flex h-screen w-60 shrink-0 flex-col bg-brand-navy text-content-inverse',
+        'transition-transform duration-200 md:static md:z-auto md:translate-x-0 md:transition-[width]',
+        anchoEscritorio,
+        mobileAbierto ? 'translate-x-0' : '-translate-x-full',
+      ].join(' ')}
     >
       {/* Header / Logo / Chevron */}
       <div className={`flex ${colapsado ? 'flex-col items-center gap-2 py-4' : 'items-start justify-between px-4 py-4'}`}>
@@ -106,7 +120,7 @@ export function Sidebar() {
         )}
         <button
           onClick={() => setColapsado(!colapsado)}
-          className="rounded-md p-1.5 text-content-inverse/60 transition-colors hover:bg-brand-navyLight hover:text-content-inverse"
+          className="hidden rounded-md p-1.5 text-content-inverse/60 transition-colors hover:bg-brand-navyLight hover:text-content-inverse md:block"
           title={colapsado ? 'Expandir menú' : 'Colapsar menú'}
           aria-label={colapsado ? 'Expandir menú' : 'Colapsar menú'}
           aria-expanded={!colapsado}
@@ -132,6 +146,7 @@ export function Sidebar() {
                   to={ruta}
                   title={colapsado ? label : undefined}
                   aria-label={label}
+                  onClick={() => onCerrarMovil?.()}
                   className={[
                     'relative mx-2 my-0.5 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                     colapsado ? 'justify-center' : '',

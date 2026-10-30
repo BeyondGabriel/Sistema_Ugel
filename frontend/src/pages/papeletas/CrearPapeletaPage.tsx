@@ -209,7 +209,7 @@ export function CrearPapeletaPage() {
 
             {/* Campos de fecha según tipo */}
             {tipoTiempo === 'DIAS' ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Input
                   theme="light"
                   label="Fecha inicio *"
@@ -238,7 +238,7 @@ export function CrearPapeletaPage() {
                   onChange={(e) => { setFechaHoras(e.target.value); setErrores((p) => ({ ...p, fechaHoras: '' })); }}
                   error={errores.fechaHoras}
                 />
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Input
                     theme="light"
                     label="Hora de salida * (24h)"

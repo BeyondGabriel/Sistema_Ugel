@@ -112,7 +112,7 @@ export function VisitasPage() {
 
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-xl font-bold text-content-primary">Visitas</h1>
           <p className="text-sm text-content-secondary">{visitas.length} registro(s)</p>
@@ -132,7 +132,7 @@ export function VisitasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+      <div className="flex flex-col gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card sm:flex-row sm:flex-wrap sm:items-start">
         <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         {esJefeODirectora && (
           <div className="flex flex-col gap-1">
@@ -160,16 +160,16 @@ export function VisitasPage() {
         )}
         <div className="flex flex-col gap-1">
           <span className="text-xs text-content-secondary">Desde</span>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field sm:w-auto" />
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field w-full sm:w-auto" />
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs text-content-secondary">Hasta</span>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field sm:w-auto" />
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field w-full sm:w-auto" />
         </div>
         {puedeListarUsuarios && (
           <div className="flex flex-col gap-1">
             <span className="text-xs text-content-secondary">Trabajador visitado</span>
-            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value ? Number(e.target.value) : '')} className="input-field sm:w-auto">
+            <select value={trabajadorFiltro} onChange={(e) => setTrabajadorFiltro(e.target.value ? Number(e.target.value) : '')} className="input-field w-full sm:w-auto">
               <option value="">Todos</option>
               {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nombres} {u.apellidos}</option>)}
             </select>
@@ -178,8 +178,8 @@ export function VisitasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
-        <table className="w-full text-sm">
+      <div className="w-full overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Visitante</th>
@@ -202,11 +202,11 @@ export function VisitasPage() {
               visitas.map((v) => (
                 <tr key={v.id} className="hover:bg-surface-bg transition-colors">
                   <td className="px-4 py-2.5 font-medium text-content-primary whitespace-nowrap">{v.visitanteNombre}</td>
-                  <td className="px-4 py-2.5 text-content-secondary">{v.visitanteDni}</td>
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">{v.visitanteDni}</td>
                   <td className="px-4 py-2.5 text-content-primary whitespace-nowrap">
                     {v.trabajadorVisitado ? `${v.trabajadorVisitado.nombres} ${v.trabajadorVisitado.apellidos}` : `#${v.trabajadorVisitadoId}`}
                   </td>
-                  <td className="px-4 py-2.5 text-content-secondary">{v.trabajadorVisitado?.jefatura?.nombre ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">{v.trabajadorVisitado?.jefatura?.nombre ?? '—'}</td>
                   <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">{formatHora(v.horaEntrada)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     {v.horaSalida

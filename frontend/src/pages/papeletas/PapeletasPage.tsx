@@ -211,9 +211,9 @@ export function PapeletasPage() {
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] bg-surface-bg px-6 py-8 space-y-5">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <h1 className="text-xl font-bold text-content-primary">Papeletas</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button theme="light" variant="ghost" size="sm" disabled={exportando} onClick={exportar}>
             <ArrowDownTrayIcon className="h-4 w-4" /> Exportar Excel
           </Button>
@@ -226,15 +226,15 @@ export function PapeletasPage() {
       </div>
 
       {/* Filtros de fecha */}
-      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+      <div className="flex flex-col gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card sm:flex-row sm:flex-wrap sm:items-start">
         <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         <div className="flex flex-col gap-1">
           <span className="text-xs text-content-secondary">Desde</span>
-          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field sm:w-auto" />
+          <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="input-field w-full sm:w-auto" />
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-xs text-content-secondary">Hasta</span>
-          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field sm:w-auto" />
+          <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="input-field w-full sm:w-auto" />
         </div>
       </div>
 

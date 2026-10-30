@@ -182,7 +182,7 @@ export function AsistenciasPage() {
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
           <ClipboardDocumentListIcon className="h-6 w-6 text-brand-blue" />
           <div>
@@ -211,7 +211,7 @@ export function AsistenciasPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card">
+      <div className="flex flex-col gap-3 rounded-ds-lg border border-line-light bg-surface-card p-4 shadow-card sm:flex-row sm:flex-wrap sm:items-start">
         <FunnelIcon className="h-4 w-4 mt-1.5 text-content-tertiary shrink-0" />
         {esJefeODirectora && (
           <div className="flex flex-col gap-1">
@@ -243,7 +243,7 @@ export function AsistenciasPage() {
             type="date"
             value={fechaInicio}
             onChange={(e) => setFechaInicio(e.target.value)}
-            className="input-field sm:w-auto"
+            className="input-field w-full sm:w-auto"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -252,7 +252,7 @@ export function AsistenciasPage() {
             type="date"
             value={fechaFin}
             onChange={(e) => setFechaFin(e.target.value)}
-            className="input-field sm:w-auto"
+            className="input-field w-full sm:w-auto"
           />
         </div>
         {puedeListarUsuarios && (
@@ -263,7 +263,7 @@ export function AsistenciasPage() {
               onChange={(e) =>
                 setUsuarioFiltro(e.target.value ? Number(e.target.value) : '')
               }
-              className="input-field sm:w-auto"
+              className="input-field w-full sm:w-auto"
             >
               <option value="">Todos</option>
               {usuarios.map((u) => (
@@ -281,7 +281,7 @@ export function AsistenciasPage() {
             onChange={(e) =>
               setJefaturaFiltro(e.target.value ? Number(e.target.value) : '')
             }
-            className="input-field sm:w-auto"
+            className="input-field w-full sm:w-auto"
           >
             <option value="">Todas</option>
             {jefaturas.map((j) => (
@@ -294,8 +294,8 @@ export function AsistenciasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
-        <table className="w-full text-sm">
+      <div className="w-full overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
@@ -332,14 +332,14 @@ export function AsistenciasPage() {
                   <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">
                     {fila.apellidos}
                   </td>
-                  <td className="px-4 py-2.5 text-content-secondary">{fila.jefatura}</td>
+                  <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">{fila.jefatura}</td>
                   <td className="px-4 py-2.5 text-content-secondary whitespace-nowrap">
                     {formatFecha(fila.diaKey)}
                   </td>
-                  <td className="px-4 py-2.5 text-state-success-fg">
+                  <td className="px-4 py-2.5 text-state-success-fg whitespace-nowrap">
                     {fila.horaEntrada ? formatHora(fila.horaEntrada) : '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-state-error-fg">
+                  <td className="px-4 py-2.5 text-state-error-fg whitespace-nowrap">
                     {fila.horaSalida ? formatHora(fila.horaSalida) : '—'}
                   </td>
                   <td className="px-4 py-2.5 text-center">

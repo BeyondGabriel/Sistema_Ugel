@@ -248,7 +248,7 @@ export function DelegacionesPage() {
 
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8 text-content-primary">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div>
           <h1 className="text-xl font-bold text-content-primary">Delegaciones de aprobación</h1>
           <p className="text-sm text-content-secondary">
@@ -256,7 +256,7 @@ export function DelegacionesPage() {
             encargado.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-content-secondary">
             <input
               type="checkbox"
@@ -272,8 +272,8 @@ export function DelegacionesPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
-        <table className="w-full text-sm">
+      <div className="w-full overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
+        <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-surface-bg text-xs font-semibold uppercase tracking-wide text-content-secondary">
             <tr>
               <th className="px-4 py-3 text-left">Titular</th>
@@ -303,7 +303,7 @@ export function DelegacionesPage() {
                 const estado = estadoDe(d);
                 return (
                   <tr key={d.id} className="hover:bg-surface-bg transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-2 text-content-primary">
                         <ArrowsRightLeftIcon className="h-4 w-4 shrink-0 text-content-tertiary" />
                         <div>
@@ -315,17 +315,17 @@ export function DelegacionesPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <p className="text-content-primary">{nombreCompleto(d.encargado)}</p>
                       <p className="text-xs text-content-tertiary">
                         {d.encargado ? ETIQUETA_ROL[d.encargado.rol] : '—'}
                         {d.encargado?.noDisponible ? ' · P1C' : ''}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-content-secondary">
+                    <td className="px-4 py-3 text-content-secondary whitespace-nowrap">
                       {formatearFechaHora(d.fechaInicio)}
                     </td>
-                    <td className="px-4 py-3 text-content-secondary">
+                    <td className="px-4 py-3 text-content-secondary whitespace-nowrap">
                       {formatearFechaHora(d.fechaFin)}
                     </td>
                     <td className="max-w-xs px-4 py-3 text-content-secondary">

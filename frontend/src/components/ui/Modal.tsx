@@ -36,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-md transform rounded-ds-lg bg-surface-card p-6 shadow-modal transition-all border border-line-light">
+              <Dialog.Panel className="w-[calc(100%-2rem)] max-w-md transform rounded-ds-lg bg-surface-card p-5 shadow-modal transition-all border border-line-light sm:w-full sm:p-6">
                 <Dialog.Title className="text-lg font-semibold text-content-primary mb-4">
                   {title}
                 </Dialog.Title>

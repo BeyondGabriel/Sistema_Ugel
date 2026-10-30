@@ -128,7 +128,7 @@ export function JefaturasPage() {
   return (
     <div className="-mx-6 -my-8 min-h-[calc(100vh-3.5rem)] space-y-5 bg-surface-bg px-6 py-8 text-content-primary">
       {/* Encabezado */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h1 className="text-xl font-bold text-content-primary">Jefaturas</h1>
           <p className="text-sm text-content-secondary">{jefaturas.length} jefatura(s)</p>
@@ -141,8 +141,8 @@ export function JefaturasPage() {
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
-        <table className="w-full text-sm">
+      <div className="w-full overflow-x-auto rounded-ds-lg border border-line-light shadow-card">
+        <table className="w-full min-w-[600px] text-sm">
           <thead className="bg-surface-bg text-xs font-semibold text-content-secondary uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Nombre</th>
@@ -167,7 +167,7 @@ export function JefaturasPage() {
             ) : (
               jefaturas.map((j) => (
                 <tr key={j.id} className="hover:bg-surface-bg transition-colors">
-                  <td className="px-4 py-3 font-medium text-content-primary">
+                  <td className="px-4 py-3 font-medium text-content-primary whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <BuildingOfficeIcon className="h-4 w-4 text-content-tertiary" />
                       {j.nombre}

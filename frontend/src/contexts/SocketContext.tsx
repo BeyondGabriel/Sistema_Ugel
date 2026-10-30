@@ -43,6 +43,54 @@ export interface SocketContextValue {
   limpiarPapeletasBloqueadas: () => void;
 }
 
+/**
+ * Reproduce un tono corto de "campana" usando la Web Audio API.
+ *
+ * Se generan dos osciladores rápidos (~800 Hz y ~1200 Hz, ~0.15 s cada uno,
+ * ~0.3 s en total) para no depender de archivos .mp3 externos. Todo va dentro
+ * de try/catch porque algunos navegadores bloquean el audio automático
+ * (autoplay policy) hasta que el usuario interactúa con la página: en ese caso
+ * la notificación se muestra igual, solo sin sonido.
+ */
+function reproducirSonidoNotificacion(): void {
+  try {
+    const AudioCtx =
+      window.AudioContext ??
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+
+    const ctx = new AudioCtx();
+    const ahora = ctx.currentTime;
+    const duracionTono = 0.14;
+    const frecuencias = [800, 1200];
+
+    frecuencias.forEach((frecuencia, indice) => {
+      const inicio = ahora + indice * 0.15;
+      const oscilador = ctx.createOscillator();
+      const ganancia = ctx.createGain();
+
+      oscilador.type = 'sine';
+      oscilador.frequency.setValueAtTime(frecuencia, inicio);
+      // Envolvente suave para evitar el "click" al cortar el tono.
+      ganancia.gain.setValueAtTime(0.0001, inicio);
+      ganancia.gain.exponentialRampToValueAtTime(0.2, inicio + 0.02);
+      ganancia.gain.exponentialRampToValueAtTime(0.0001, inicio + duracionTono);
+
+      oscilador.connect(ganancia);
+      ganancia.connect(ctx.destination);
+      oscilador.start(inicio);
+      oscilador.stop(inicio + duracionTono + 0.02);
+    });
+
+    // El contexto se libera cuando ya terminaron los dos tonos (~0.3 s).
+    window.setTimeout(() => {
+      void ctx.close().catch(() => {});
+    }, 400);
+  } catch (error) {
+    console.warn('[Socket.IO] No se pudo reproducir el sonido de notificación:', error);
+  }
+}
+
 export const SocketContext = createContext<SocketContextValue>({
   socket: null,
   notificacionesSocket: [],
@@ -95,6 +143,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         ...prev,
       ].slice(0, 50)); // máximo 50 en memoria
 
+      reproducirSonidoNotificacion();
       mostrar(payload.mensaje, 'info');
     });
 

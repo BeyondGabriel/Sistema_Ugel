@@ -189,7 +189,7 @@ export function UsuarioFormPage() {
 
       <form onSubmit={handleSubmit}>
         <Card theme="light">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               label="Nombres *"
               theme="light"
@@ -220,7 +220,7 @@ export function UsuarioFormPage() {
             />
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Rol */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-content-primary">Rol *</label>
