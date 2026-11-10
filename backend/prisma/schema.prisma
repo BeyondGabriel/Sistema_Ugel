@@ -101,6 +101,18 @@ model Usuario {
   papeletasAnuladas   Papeleta[] @relation("PapeletasAnuladasPorAdmin")
   papeletasReasignadas Papeleta[] @relation("PapeletaReasignadaPor")
 
+  // ── Módulo de vacaciones ────────────────────────────────────
+  // Saldo anual de vacaciones del usuario (un registro por año).
+  saldosVacaciones        VacacionSaldo[]
+  // Solicitudes de vacaciones creadas por el usuario.
+  vacacionesSolicitadas   SolicitudVacacion[] @relation("VacacionesSolicitadas")
+  // Solicitudes en las que este usuario dio el VoBo (Jefe inmediato).
+  vacacionesAprobadasJefe SolicitudVacacion[] @relation("VacacionesAprobadasJefe")
+  // Solicitudes en las que este usuario dio la aprobación final (RRHH).
+  vacacionesAprobadasRRHH SolicitudVacacion[] @relation("VacacionesAprobadasRRHH")
+  // Bloques de rol vacacional programados por año.
+  rolesVacaciones         RolVacaciones[]
+
   // Relación con Movimiento (asistencias)
   movimientos         Movimiento[]
 
@@ -294,4 +306,83 @@ model Delegacion {
   @@index([encargadoId])
   @@index([creadoPorId])
   @@index([activo, fechaInicio, fechaFin])
+}
+
+// ---------------------------
+// MÓDULO DE VACACIONES
+// ---------------------------
+
+enum EstadoSolicitudVacacion {
+  PENDIENTE
+  CON_VB
+  APROBADA
+  RECHAZADA
+  CANCELADA
+}
+
+enum TipoVacacion {
+  DIA_COMPLETO
+  MEDIO_DIA
+}
+
+/// Saldo anual de vacaciones de un usuario. Los días ganados (30 por defecto)
+/// se consumen con cada solicitud aprobada (diasUsados).
+model VacacionSaldo {
+  id                  Int      @id @default(autoincrement())
+  usuarioId           Int
+  anio                Int
+  diasGanados         Decimal  @default(30.00) @db.Decimal(5, 2)
+  diasUsados          Decimal  @default(0.00) @db.Decimal(5, 2)
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  usuario             Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, anio])
+  @@index([usuarioId])
+}
+
+/// Solicitud de vacaciones: día completo o medio día (bloque de 4 horas).
+/// Flujo: PENDIENTE -> CON_VB (Jefe) -> APROBADA (RRHH), o RECHAZADA/CANCELADA.
+model SolicitudVacacion {
+  id                  Int      @id @default(autoincrement())
+  solicitanteId       Int
+  aprobadorId         Int?     // Jefe que da el VoBo
+  rrhhId              Int?     // RRHH que da la aprobación final
+
+  tipo                TipoVacacion
+  fechaInicio         DateTime
+  fechaFin            DateTime
+  horaInicio          String?  // Ej. "09:00" (solo para MEDIO_DIA)
+  horaFin             String?  // Ej. "13:00" (solo para MEDIO_DIA)
+
+  diasDescontados     Decimal  @db.Decimal(4, 2) // 1.00 día completo, 0.50 medio día
+  estado              EstadoSolicitudVacacion @default(PENDIENTE)
+
+  motivoRechazo       String?
+  fechaCreacion       DateTime @default(now())
+  fechaActualizacion  DateTime @updatedAt
+
+  solicitante         Usuario  @relation("VacacionesSolicitadas", fields: [solicitanteId], references: [id])
+  aprobador           Usuario? @relation("VacacionesAprobadasJefe", fields: [aprobadorId], references: [id])
+  rrhh                Usuario? @relation("VacacionesAprobadasRRHH", fields: [rrhhId], references: [id])
+
+  @@index([solicitanteId])
+  @@index([estado])
+}
+
+/// Bloque de rol vacacional programado: rango de fechas en el que el usuario
+/// estará de vacaciones (el bloque principal es el de 7 días).
+model RolVacaciones {
+  id                Int      @id @default(autoincrement())
+  usuarioId         Int
+  anio              Int
+  fechaInicio       DateTime
+  fechaFin          DateTime
+  esBloquePrincipal Boolean  @default(true)
+  fechaCreacion     DateTime @default(now())
+
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, anio])
 }
