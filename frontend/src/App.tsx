@@ -58,6 +58,12 @@ const RegistroVisitaPage = lazy(() =>
 const NotificacionesPage = lazy(() =>
   import('./pages/notificaciones/NotificacionesPage').then((m) => ({ default: m.NotificacionesPage })),
 );
+const MisVacacionesPage = lazy(() =>
+  import('./pages/vacaciones/MisVacacionesPage').then((m) => ({ default: m.MisVacacionesPage })),
+);
+const GestionVacacionesPage = lazy(() =>
+  import('./pages/vacaciones/GestionVacacionesPage').then((m) => ({ default: m.GestionVacacionesPage })),
+);
 const NotFoundPage = lazy(() =>
   import('./pages/dashboard/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 );
@@ -108,6 +114,8 @@ export default function App() {
                   <Route path="/papeletas/:id/reenviar" element={<CrearPapeletaPage />} />
                   <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
                   <Route path="/papeletas" element={<PapeletasPage />} />
+                  <Route path="/vacaciones/mis-vacaciones" element={<MisVacacionesPage />} />
+                  <Route path="/vacaciones/gestion" element={<GestionVacacionesPage />} />
                   <Route path="/visitas/registro" element={<RegistroVisitaPage />} />
                   <Route path="/visitas" element={<VisitasPage />} />
                   <Route path="/notificaciones" element={<NotificacionesPage />} />

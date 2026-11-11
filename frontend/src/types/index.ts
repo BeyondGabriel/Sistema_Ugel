@@ -173,6 +173,38 @@ export interface Delegacion {
   creadoPor?: UsuarioBasico | null;
 }
 
+// ─── Módulo de vacaciones ─────────────────────────────────
+
+/** Estados del flujo PENDIENTE → CON_VB → APROBADA (o RECHAZADA/CANCELADA). */
+export type EstadoSolicitudVacacion = 'PENDIENTE' | 'CON_VB' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA';
+export type TipoVacacion = 'DIA_COMPLETO' | 'MEDIO_DIA';
+
+export interface VacacionSaldo {
+  id: number;
+  usuarioId: number;
+  anio: number;
+  diasGanados: number;
+  diasUsados: number;
+  diasPendientes: number;
+}
+
+export interface SolicitudVacacion {
+  id: number;
+  solicitanteId: number;
+  aprobadorId?: number | null;
+  rrhhId?: number | null;
+  tipo: TipoVacacion;
+  fechaInicio: string;
+  fechaFin: string;
+  horaInicio?: string | null;
+  horaFin?: string | null;
+  diasDescontados: number;
+  estado: EstadoSolicitudVacacion;
+  motivoRechazo?: string | null;
+  fechaCreacion: string;
+  solicitante?: UsuarioBasico;
+}
+
 /** Error genérico del API */
 export interface ApiError {
   mensaje: string;

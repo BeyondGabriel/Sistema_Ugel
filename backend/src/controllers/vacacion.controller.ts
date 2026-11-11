@@ -255,6 +255,77 @@ export async function rechazarSolicitud(req: Request, res: Response): Promise<vo
 }
 
 /**
+ * GET /api/vacaciones
+ * Listado de solicitudes con visibilidad según el rol del usuario autenticado:
+ * - ESPECIALISTA / VIGILANTE: solo sus propias solicitudes.
+ * - JEFE: las propias y las de sus subordinados directos.
+ * - DIRECTORA, RRHH y ADMIN: todas las solicitudes.
+ * Admite filtrar por `estado` y por `usuarioId`, siempre dentro del alcance del rol.
+ */
+export async function listarSolicitudes(req: Request, res: Response): Promise<void> {
+  try {
+    const usuarioToken = req.usuario!;
+    const { estado, usuarioId } = req.query as { estado?: string; usuarioId?: string };
+
+    const where: any = {};
+
+    // Filtro de visibilidad por rol
+    if (usuarioToken.rol === 'ESPECIALISTA' || usuarioToken.rol === 'VIGILANTE') {
+      where.solicitanteId = usuarioToken.id;
+    } else if (usuarioToken.rol === 'JEFE') {
+      // El jefe ve sus propias solicitudes y las de sus subordinados
+      const subordinados = await prisma.usuario.findMany({
+        where: { jefeId: usuarioToken.id },
+        select: { id: true },
+      });
+      const idsVisibles = [usuarioToken.id, ...subordinados.map((s) => s.id)];
+      where.solicitanteId = { in: idsVisibles };
+    } else if (usuarioToken.rol === 'DIRECTORA') {
+      // La Directora ve todo: no se restringe solicitanteId
+    } else if (usuarioToken.rol === 'RRHH' || usuarioToken.rol === 'ADMIN') {
+      // RRHH y Admin ven todo: no se restringe solicitanteId
+    }
+
+    // Si se envía un usuarioId específico (y está dentro del alcance), se filtra por él
+    if (usuarioId) {
+      const numId = Number(usuarioId);
+      if (
+        !where.solicitanteId ||
+        where.solicitanteId === numId ||
+        where.solicitanteId.in?.includes(numId)
+      ) {
+        where.solicitanteId = numId;
+      }
+    }
+
+    if (estado) {
+      where.estado = estado;
+    }
+
+    const solicitudes = await prisma.solicitudVacacion.findMany({
+      where,
+      include: {
+        solicitante: {
+          select: {
+            id: true,
+            nombres: true,
+            apellidos: true,
+            jefatura: { select: { nombre: true } },
+          },
+        },
+        aprobador: { select: { id: true, nombres: true, apellidos: true } },
+      },
+      orderBy: { fechaCreacion: 'desc' },
+    });
+
+    res.status(200).json({ solicitudes });
+  } catch (error) {
+    console.error('Error en listarSolicitudes:', error);
+    res.status(500).json({ mensaje: 'Error interno del servidor' });
+  }
+}
+
+/**
  * POST /api/vacaciones/saldos
  * Carga/actualización manual del saldo anual de un trabajador (Admin/RRHH).
  */

@@ -13,6 +13,8 @@ import {
   ChevronRightIcon,
   ShieldCheckIcon,
   ArrowsRightLeftIcon,
+  CalendarDaysIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../hooks/useAuth';
 import type { Rol } from '../../types';
@@ -51,6 +53,23 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Papeletas', ruta: '/papeletas', Icono: DocumentCheckIcon, roles: ['ADMIN', 'RRHH', 'DIRECTORA', 'JEFE', 'ESPECIALISTA', 'VIGILANTE'] },
       { label: 'Visitas', ruta: '/visitas', Icono: IdentificationIcon, roles: ['VIGILANTE', 'ADMIN', 'RRHH', 'JEFE', 'DIRECTORA', 'ESPECIALISTA'] },
       { label: 'Verificar Token', ruta: '/verificar-token', Icono: QrCodeIcon, roles: ['VIGILANTE', 'ADMIN', 'RRHH'] },
+    ],
+  },
+  {
+    titulo: 'Vacaciones',
+    items: [
+      {
+        label: 'Mis Vacaciones',
+        ruta: '/vacaciones/mis-vacaciones',
+        Icono: CalendarDaysIcon,
+        roles: ['ADMIN', 'RRHH', 'DIRECTORA', 'JEFE', 'ESPECIALISTA', 'VIGILANTE'],
+      },
+      {
+        label: 'Gestión de Vacaciones',
+        ruta: '/vacaciones/gestion',
+        Icono: ClipboardDocumentCheckIcon,
+        roles: ['JEFE', 'DIRECTORA', 'RRHH', 'ADMIN'],
+      },
     ],
   },
   {

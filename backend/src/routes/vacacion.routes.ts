@@ -2,6 +2,7 @@
 // Rutas del módulo de vacaciones
 //
 // Flujo de aprobación:
+//   GET    /api/vacaciones                  → listado según rol (propios/subordinados/todos)
 //   POST   /api/vacaciones                  → solicitud del usuario (PENDIENTE)
 //   PUT    /api/vacaciones/:id/vb           → VoBo del Jefe/Directora
 //   PUT    /api/vacaciones/:id/aprobar      → aprobación final de RRHH/Admin
@@ -13,6 +14,7 @@ import { Router } from 'express';
 
 import {
   obtenerMiSaldo,
+  listarSolicitudes,
   crearSolicitud,
   darVistoBueno,
   aprobarSolicitud,
@@ -26,6 +28,7 @@ import { validate } from '../middlewares/validate';
 
 import {
   crearSolicitudVacacionSchema,
+  listarSolicitudesQuerySchema,
   rechazarSolicitudVacacionSchema,
   crearSaldoVacacionSchema,
   solicitudVacacionIdParamsSchema,
@@ -34,6 +37,13 @@ import {
 const router = Router();
 
 router.get('/mi-saldo', authJWT, obtenerMiSaldo);
+
+router.get(
+  '/',
+  authJWT,
+  validate(listarSolicitudesQuerySchema, 'query'),
+  listarSolicitudes,
+);
 
 router.post(
   '/',
