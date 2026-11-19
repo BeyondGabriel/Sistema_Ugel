@@ -4,6 +4,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ArrowPathIcon,
+  ArrowDownTrayIcon,
   CheckIcon,
   XMarkIcon,
   HandThumbUpIcon,
@@ -197,6 +198,7 @@ function TabBandeja({ solicitudes, cargando, esJefe, esRrhh, onRecargar }: TabBa
     id: null,
   });
   const [procesandoRechazo, setProcesandoRechazo] = useState(false);
+  const [exportando, setExportando] = useState(false);
 
   const visibles = useMemo(() => {
     const lista = filtroEstado ? solicitudes.filter((s) => s.estado === filtroEstado) : solicitudes;
@@ -235,6 +237,19 @@ function TabBandeja({ solicitudes, cargando, esJefe, esRrhh, onRecargar }: TabBa
     }
   }
 
+  /** Descarga el reporte Excel respetando el filtro de estado activo. */
+  async function exportar() {
+    setExportando(true);
+    try {
+      await vacacionService.exportarExcel(filtroEstado ? { estado: filtroEstado } : undefined);
+      mostrar('Reporte de vacaciones exportado', 'success');
+    } catch (err) {
+      mostrar(extractMsg(err), 'error');
+    } finally {
+      setExportando(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       {/* Resumen y filtro por estado */}
@@ -244,18 +259,31 @@ function TabBandeja({ solicitudes, cargando, esJefe, esRrhh, onRecargar }: TabBa
           <span className="badge-warning">{conVb} con VoBo</span>
           <span className="badge-success">{aprobadas} aprobada(s)</span>
         </div>
-        <select
-          className="input-field w-full sm:w-auto"
-          value={filtroEstado}
-          onChange={(e) => setFiltroEstado(e.target.value as EstadoSolicitudVacacion | '')}
-        >
-          <option value="">Todos los estados</option>
-          <option value="PENDIENTE">Pendiente</option>
-          <option value="CON_VB">Con VoBo</option>
-          <option value="APROBADA">Aprobada</option>
-          <option value="RECHAZADA">Rechazada</option>
-          <option value="CANCELADA">Cancelada</option>
-        </select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <select
+            className="input-field w-full sm:w-auto"
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value as EstadoSolicitudVacacion | '')}
+          >
+            <option value="">Todos los estados</option>
+            <option value="PENDIENTE">Pendiente</option>
+            <option value="CON_VB">Con VoBo</option>
+            <option value="APROBADA">Aprobada</option>
+            <option value="RECHAZADA">Rechazada</option>
+            <option value="CANCELADA">Cancelada</option>
+          </select>
+          {esRrhh && (
+            <Button
+              theme="light"
+              variant="ghost"
+              size="sm"
+              disabled={exportando}
+              onClick={() => void exportar()}
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" /> Exportar Excel
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Tabla de solicitudes */}

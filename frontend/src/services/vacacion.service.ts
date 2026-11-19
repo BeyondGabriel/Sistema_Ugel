@@ -8,6 +8,7 @@
 // ===========================================================
 
 import { api } from './api';
+import { fechaHoyLocal } from '../utils/fechaHora';
 import type {
   EstadoSolicitudVacacion,
   SolicitudVacacion,
@@ -33,6 +34,13 @@ export interface FiltrosSolicitudesVacacion {
   estado?: EstadoSolicitudVacacion;
   /** El backend expone el filtro como `usuarioId` (solicitante). */
   usuarioId?: number;
+}
+
+/** Filtros opcionales del reporte Excel de vacaciones (RRHH/Admin). */
+export interface FiltrosExportarVacacion {
+  estado?: EstadoSolicitudVacacion;
+  /** Año de la fecha de inicio de las vacaciones. */
+  anio?: number;
 }
 
 export interface DatosSaldoManual {
@@ -154,5 +162,24 @@ export const vacacionService = {
   async crearSaldoManual(datos: DatosSaldoManual): Promise<VacacionSaldo> {
     const { data } = await api.post<RespuestaSaldo>('/vacaciones/saldos', datos);
     return data.saldo;
+  },
+
+  /**
+   * Descarga el reporte Excel de vacaciones (solo RRHH/Admin en el backend).
+   * Acepta filtros opcionales por estado y año.
+   */
+  async exportarExcel(filtros?: FiltrosExportarVacacion): Promise<void> {
+    const params: Record<string, string | number> = {};
+    if (filtros?.estado) params.estado = filtros.estado;
+    if (filtros?.anio) params.anio = filtros.anio;
+
+    const resp = await api.get('/vacaciones/exportar', { params, responseType: 'blob' });
+
+    const url = URL.createObjectURL(resp.data as Blob);
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = `vacaciones-${fechaHoyLocal()}.xlsx`;
+    enlace.click();
+    URL.revokeObjectURL(url);
   },
 };

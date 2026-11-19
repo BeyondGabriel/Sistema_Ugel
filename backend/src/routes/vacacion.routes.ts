@@ -20,7 +20,10 @@ import {
   aprobarSolicitud,
   rechazarSolicitud,
   crearSaldoManual,
+  descargarPDF,
 } from '../controllers/vacacion.controller';
+
+import { exportarVacaciones } from '../controllers/reportes.controller';
 
 import { authJWT } from '../middlewares/authJWT';
 import { checkRole } from '../middlewares/checkRole';
@@ -59,6 +62,17 @@ router.post(
   checkRole('ADMIN', 'RRHH'),
   validate(crearSaldoVacacionSchema, 'body'),
   crearSaldoManual,
+);
+
+// Exportación a Excel: debe registrarse ANTES de /:id/... para que
+// "exportar" no sea interpretado como un id por las rutas con parámetros.
+router.get('/exportar', authJWT, checkRole('RRHH', 'ADMIN'), exportarVacaciones);
+
+router.get(
+  '/:id/pdf',
+  authJWT,
+  validate(solicitudVacacionIdParamsSchema, 'params'),
+  descargarPDF,
 );
 
 router.put(

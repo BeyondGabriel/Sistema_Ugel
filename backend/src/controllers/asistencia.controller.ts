@@ -165,7 +165,7 @@ export async function registrarMovimiento(req: Request, res: Response): Promise<
     // Bloqueo por papeleta aprobada (día completo o rango de horas)
     const estaBloqueado = await verificarBloqueo(usuarioId, fechaMovimiento);
     if (estaBloqueado) {
-      res.status(409).json({ mensaje: 'El registro está bloqueado por una papeleta activa' });
+      res.status(409).json({ mensaje: 'El registro está bloqueado por una papeleta o vacación activa' });
       return;
     }
 
@@ -251,7 +251,7 @@ export async function editarMovimiento(req: Request, res: Response): Promise<voi
     // Verifica que el nuevo timestamp no caiga en un rango bloqueado por papeleta
     const estaBloqueado = await verificarBloqueo(movimiento.usuarioId, nuevaFecha);
     if (estaBloqueado) {
-      res.status(409).json({ mensaje: 'El registro está bloqueado por una papeleta activa' });
+      res.status(409).json({ mensaje: 'El registro está bloqueado por una papeleta o vacación activa' });
       return;
     }
 

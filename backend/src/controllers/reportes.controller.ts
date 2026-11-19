@@ -6,7 +6,15 @@
 
 import { Request, Response } from 'express';
 import ExcelJS from 'exceljs';
-import { Rol, EstadoPapeleta, TipoTiempo, TipoMovimiento, Prisma } from '@prisma/client';
+import {
+  Rol,
+  EstadoPapeleta,
+  TipoTiempo,
+  TipoMovimiento,
+  EstadoSolicitudVacacion,
+  TipoVacacion,
+  Prisma,
+} from '@prisma/client';
 import prisma from '../utils/prisma';
 import { obtenerRangoDelDia } from '../utils/fechas';
 import { obtenerIdsVisibles } from '../services/visibilidadPapeletas.service';
@@ -469,6 +477,105 @@ export async function exportarPapeletas(req: Request, res: Response): Promise<vo
     await enviarExcel(res, workbook, `papeletas-${new Date().toISOString().slice(0, 10)}.xlsx`);
   } catch (error) {
     console.error('Error en exportarPapeletas:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ mensaje: 'Error interno del servidor' });
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/vacaciones/exportar
+// ─────────────────────────────────────────────────────────────
+
+const ETIQUETA_ESTADO_VACACION: Record<EstadoSolicitudVacacion, string> = {
+  PENDIENTE: 'Pendiente',
+  CON_VB: 'Con VoBo',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  CANCELADA: 'Cancelada',
+};
+
+const ETIQUETA_TIPO_VACACION: Record<TipoVacacion, string> = {
+  DIA_COMPLETO: 'Día completo',
+  MEDIO_DIA: 'Medio día',
+};
+
+export async function exportarVacaciones(req: Request, res: Response): Promise<void> {
+  try {
+    const usuarioToken = req.usuario;
+    if (!usuarioToken) {
+      res.status(401).json({ mensaje: 'No autenticado' });
+      return;
+    }
+
+    const { estado, anio } = req.query as { estado?: string; anio?: string };
+
+    const where: Prisma.SolicitudVacacionWhereInput = {};
+
+    if (estado !== undefined) {
+      if (!(estado in ETIQUETA_ESTADO_VACACION)) {
+        res.status(400).json({ mensaje: 'El estado especificado no es válido' });
+        return;
+      }
+      where.estado = estado as EstadoSolicitudVacacion;
+    }
+
+    if (anio !== undefined) {
+      const anioNum = Number(anio);
+      if (!Number.isInteger(anioNum) || anioNum < 2000 || anioNum > 2100) {
+        res.status(400).json({ mensaje: 'El año especificado no es válido' });
+        return;
+      }
+      where.fechaInicio = {
+        gte: new Date(anioNum, 0, 1),
+        lte: new Date(anioNum, 11, 31, 23, 59, 59, 999),
+      };
+    }
+
+    const solicitudes = await prisma.solicitudVacacion.findMany({
+      where,
+      include: {
+        solicitante: { include: { jefatura: { select: { nombre: true } } } },
+        aprobador: { select: { nombres: true, apellidos: true } },
+      },
+      orderBy: { fechaInicio: 'desc' },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SIGPER - UGEL Talara';
+    const hoja = workbook.addWorksheet('Vacaciones');
+
+    hoja.columns = [
+      { header: 'Trabajador', key: 'trabajador', width: 28 },
+      { header: 'Jefatura', key: 'jefatura', width: 22 },
+      { header: 'Tipo', key: 'tipo', width: 14 },
+      { header: 'Fecha Inicio', key: 'fechaInicio', width: 14 },
+      { header: 'Fecha Fin', key: 'fechaFin', width: 14 },
+      { header: 'Días Descontados', key: 'diasDescontados', width: 16 },
+      { header: 'Estado', key: 'estado', width: 16 },
+      { header: 'Aprobador', key: 'aprobador', width: 28 },
+    ];
+
+    estilizarCabecera(hoja.getRow(1), hoja.columns.length);
+
+    for (const solicitud of solicitudes) {
+      hoja.addRow({
+        trabajador: `${solicitud.solicitante.nombres} ${solicitud.solicitante.apellidos}`,
+        jefatura: solicitud.solicitante.jefatura?.nombre ?? '—',
+        tipo: ETIQUETA_TIPO_VACACION[solicitud.tipo],
+        fechaInicio: formatearFecha(solicitud.fechaInicio),
+        fechaFin: formatearFecha(solicitud.fechaFin),
+        diasDescontados: Number(solicitud.diasDescontados),
+        estado: ETIQUETA_ESTADO_VACACION[solicitud.estado],
+        aprobador: solicitud.aprobador
+          ? `${solicitud.aprobador.nombres} ${solicitud.aprobador.apellidos}`
+          : '—',
+      });
+    }
+
+    await enviarExcel(res, workbook, `vacaciones-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  } catch (error) {
+    console.error('Error en exportarVacaciones:', error);
     if (!res.headersSent) {
       res.status(500).json({ mensaje: 'Error interno del servidor' });
     }

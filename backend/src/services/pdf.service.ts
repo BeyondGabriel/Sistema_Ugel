@@ -4,7 +4,12 @@
 // ===========================================================
 
 import PDFDocument from 'pdfkit';
-import { EstadoPapeleta, TipoTiempo } from '@prisma/client';
+import {
+  EstadoPapeleta,
+  EstadoSolicitudVacacion,
+  TipoTiempo,
+  TipoVacacion,
+} from '@prisma/client';
 import prisma from '../utils/prisma';
 
 const NOMBRE_INSTITUCION = 'UGEL Talara';
@@ -248,5 +253,214 @@ function dibujarRecuadroFirma(doc: PDFKit.PDFDocument, svgUrl: string): void {
   doc.restore();
 
   doc.fillColor('black').font('Helvetica');
+}
+
+// ===========================================================
+// PDF de solicitudes de vacaciones
+// ===========================================================
+
+/** Etiquetas legibles para el estado de una solicitud de vacaciones. */
+const ETIQUETAS_ESTADO_VACACION: Record<EstadoSolicitudVacacion, string> = {
+  PENDIENTE: 'Pendiente',
+  CON_VB: 'Con VoBo del Jefe',
+  APROBADA: 'Aprobada',
+  RECHAZADA: 'Rechazada',
+  CANCELADA: 'Cancelada',
+};
+
+/** Formatea una fecha (sin hora) en el formato local es-PE. */
+function formatearFechaVacacion(fecha: Date | null | undefined): string {
+  if (!fecha) {
+    return '—';
+  }
+  return new Date(fecha).toLocaleDateString('es-PE', { dateStyle: 'medium' });
+}
+
+/** Consulta la solicitud de vacaciones con las relaciones necesarias para el PDF. */
+async function obtenerVacacionParaPdf(solicitudId: number) {
+  return prisma.solicitudVacacion.findUnique({
+    where: { id: solicitudId },
+    include: {
+      solicitante: { include: { jefatura: true } },
+      aprobador: { select: { nombres: true, apellidos: true } },
+      rrhh: { select: { nombres: true, apellidos: true } },
+    },
+  });
+}
+
+/**
+ * Dibuja un texto diagonal como marca de agua sobre toda la página.
+ * Se invoca antes del contenido para que el texto quede por detrás de los
+ * datos de la solicitud.
+ */
+function dibujarMarcaAgua(doc: PDFKit.PDFDocument, texto: string): void {
+  doc.save();
+  doc.translate(doc.page.width / 2, doc.page.height / 2);
+  doc.rotate(-45);
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(42)
+    .fillColor('#d1d5db')
+    .fillOpacity(0.5)
+    .text(texto, -240, -20, { width: 480, align: 'center' });
+  doc.restore();
+
+  // Restaurar el estado tipográfico y el cursor del documento.
+  doc.fillColor('black').fillOpacity(1).font('Helvetica');
+  doc.x = doc.page.margins.left;
+  doc.y = doc.page.margins.top;
+}
+
+/** Nombre completo de un usuario, o un guion si no existe. */
+function nombreCompleto(usuario: { nombres: string; apellidos: string } | null): string {
+  if (!usuario) {
+    return '—';
+  }
+  return `${usuario.nombres} ${usuario.apellidos}`;
+}
+
+/**
+ * Dibuja el recuadro inferior con los tres espacios de firma:
+ * Trabajador, Jefe Inmediato (VoBo) y RRHH (Aprobación Final).
+ */
+function dibujarRecuadroFirmasVacacion(
+  doc: PDFKit.PDFDocument,
+  nombres: { trabajador: string; jefe: string; rrhh: string }
+): void {
+  const margenIzquierdo = doc.page.margins.left;
+  const anchoTotal = doc.page.width - margenIzquierdo - doc.page.margins.right;
+  const altoRecuadro = 95;
+  const anchoFirma = anchoTotal / 3;
+  const y = doc.page.height - doc.page.margins.bottom - altoRecuadro;
+
+  const firmas = [
+    { titulo: 'Trabajador', nombre: nombres.trabajador },
+    { titulo: 'Jefe Inmediato (VoBo)', nombre: nombres.jefe },
+    { titulo: 'RRHH (Aprobación Final)', nombre: nombres.rrhh },
+  ];
+
+  doc.save();
+  doc.lineWidth(1).strokeColor('#6b7280');
+  doc.rect(margenIzquierdo, y, anchoTotal, altoRecuadro).stroke();
+
+  firmas.forEach((firma, indice) => {
+    const x = margenIzquierdo + indice * anchoFirma;
+
+    // Separador vertical entre espacios de firma
+    if (indice > 0) {
+      doc.moveTo(x, y).lineTo(x, y + altoRecuadro).stroke();
+    }
+
+    doc
+      .fontSize(9)
+      .font('Helvetica')
+      .fillColor('#374151')
+      .text(firma.nombre, x + 6, y + 40, { width: anchoFirma - 12, align: 'center' });
+
+    // Línea de firma
+    doc
+      .moveTo(x + 15, y + 58)
+      .lineTo(x + anchoFirma - 15, y + 58)
+      .stroke();
+
+    doc
+      .fontSize(8)
+      .font('Helvetica-Bold')
+      .fillColor('#374151')
+      .text(firma.titulo, x + 6, y + 64, { width: anchoFirma - 12, align: 'center' });
+  });
+
+  doc.restore();
+
+  doc.fillColor('black').font('Helvetica');
+}
+
+/**
+ * Genera el PDF de una solicitud de vacaciones en memoria y devuelve su
+ * contenido como Buffer, listo para enviarse directamente como respuesta HTTP.
+ */
+export async function generarPDFVacacion(solicitudId: number): Promise<Buffer> {
+  const solicitud = await obtenerVacacionParaPdf(solicitudId);
+
+  if (!solicitud) {
+    throw new Error('Solicitud de vacaciones no encontrada');
+  }
+
+  const doc = new PDFDocument({ size: 'A4', margin: 50 });
+  const chunks: Buffer[] = [];
+
+  doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+  const pdfListo = new Promise<Buffer>((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+  });
+
+  // --- Marca de agua si la solicitud aún no está aprobada ---
+  if (solicitud.estado !== EstadoSolicitudVacacion.APROBADA) {
+    dibujarMarcaAgua(doc, 'PENDIENTE DE APROBACIÓN');
+  }
+
+  // --- Encabezado institucional ---
+  doc.fontSize(18).font('Helvetica-Bold').text(NOMBRE_INSTITUCION, { align: 'center' });
+  doc.fontSize(14).font('Helvetica').text('Solicitud de Vacaciones', { align: 'center' });
+  doc.moveDown(1.5);
+
+  doc
+    .fontSize(11)
+    .font('Helvetica-Bold')
+    .text('N.º de solicitud: ', { continued: true })
+    .font('Helvetica')
+    .text(String(solicitud.id));
+  doc.moveDown(0.5);
+
+  // --- Datos del solicitante ---
+  doc.font('Helvetica-Bold').text('Solicitante');
+  doc
+    .font('Helvetica')
+    .text(`${solicitud.solicitante.nombres} ${solicitud.solicitante.apellidos}`);
+  doc.text(`Jefatura: ${solicitud.solicitante.jefatura?.nombre ?? 'No asignada'}`);
+  doc.moveDown(0.5);
+
+  // --- Detalle de las vacaciones ---
+  doc.font('Helvetica-Bold').text('Detalle de las vacaciones');
+  doc
+    .font('Helvetica')
+    .text(
+      `Tipo: ${solicitud.tipo === TipoVacacion.MEDIO_DIA ? 'Medio Día' : 'Día Completo'}`
+    );
+  doc.text(`Fecha de inicio: ${formatearFechaVacacion(solicitud.fechaInicio)}`);
+  doc.text(`Fecha de fin: ${formatearFechaVacacion(solicitud.fechaFin)}`);
+
+  if (solicitud.tipo === TipoVacacion.MEDIO_DIA) {
+    doc.text(`Horas: ${solicitud.horaInicio ?? '—'} a ${solicitud.horaFin ?? '—'}`);
+  } else {
+    doc.text('Horas: No aplica');
+  }
+
+  doc.text(`Días descontados: ${Number(solicitud.diasDescontados)}`);
+  doc.moveDown(0.5);
+
+  // --- Estado actual ---
+  doc
+    .font('Helvetica-Bold')
+    .text('Estado actual: ', { continued: true })
+    .font('Helvetica')
+    .text(ETIQUETAS_ESTADO_VACACION[solicitud.estado]);
+
+  if (solicitud.estado === EstadoSolicitudVacacion.RECHAZADA && solicitud.motivoRechazo) {
+    doc.text(`Motivo de rechazo: ${solicitud.motivoRechazo}`);
+  }
+
+  // --- Recuadro de firmas (parte inferior de la página) ---
+  dibujarRecuadroFirmasVacacion(doc, {
+    trabajador: `${solicitud.solicitante.nombres} ${solicitud.solicitante.apellidos}`,
+    jefe: nombreCompleto(solicitud.aprobador),
+    rrhh: nombreCompleto(solicitud.rrhh),
+  });
+
+  doc.end();
+
+  return pdfListo;
 }
 

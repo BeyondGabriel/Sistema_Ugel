@@ -26,6 +26,7 @@ import {
   solicitudVacacionIdParamsSchema,
 } from '../schemas/vacacion.schema';
 import { notificar } from '../services/notificacion.service';
+import { generarPDFVacacion } from '../services/pdf.service';
 
 /** Saldo que descuenta una solicitud de medio día (bloque de 4 horas). */
 const DIAS_MEDIO_DIA = 0.5;
@@ -347,3 +348,61 @@ export async function crearSaldoManual(req: Request, res: Response): Promise<voi
     res.status(500).json({ mensaje: 'Error interno' });
   }
 }
+
+/**
+ * GET /api/vacaciones/:id/pdf
+ * Genera y devuelve el PDF de una solicitud de vacaciones en memoria
+ * (no se guarda en disco). Puede acceder el solicitante, su jefe inmediato
+ * (o aprobador) y los roles con visión global (RRHH, ADMIN y DIRECTORA).
+ */
+export async function descargarPDF(req: Request, res: Response): Promise<void> {
+  try {
+    // El id ya llega validado (entero positivo) por solicitudVacacionIdParamsSchema.
+    const { id } = req.params as unknown as z.infer<typeof solicitudVacacionIdParamsSchema>;
+
+    const usuarioToken = req.usuario;
+    if (!usuarioToken) {
+      res.status(401).json({ mensaje: 'No autenticado' });
+      return;
+    }
+
+    const solicitud = await prisma.solicitudVacacion.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        solicitanteId: true,
+        aprobadorId: true,
+        solicitante: { select: { jefeId: true } },
+      },
+    });
+
+    if (!solicitud) {
+      res.status(404).json({ mensaje: 'Solicitud no encontrada' });
+      return;
+    }
+
+    const esSolicitante = solicitud.solicitanteId === usuarioToken.id;
+    const esJefe =
+      solicitud.aprobadorId === usuarioToken.id ||
+      solicitud.solicitante.jefeId === usuarioToken.id;
+    const esRrhhOAdmin = usuarioToken.rol === 'RRHH' || usuarioToken.rol === 'ADMIN';
+    const esDirectora = usuarioToken.rol === 'DIRECTORA';
+
+    if (!esSolicitante && !esJefe && !esRrhhOAdmin && !esDirectora) {
+      res.status(403).json({ mensaje: 'No tiene permisos para ver esta solicitud' });
+      return;
+    }
+
+    const bufferPdf = await generarPDFVacacion(id);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="vacaciones-${id}.pdf"`);
+    res.status(200).send(bufferPdf);
+  } catch (error) {
+    console.error('Error en descargarPDF (vacaciones):', error);
+    if (!res.headersSent) {
+      res.status(500).json({ mensaje: 'Error interno del servidor' });
+    }
+  }
+}
+
