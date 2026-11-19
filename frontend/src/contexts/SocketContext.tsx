@@ -7,6 +7,7 @@
 import { createContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { getToken } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import type { Notificacion } from '../types';
 
@@ -106,6 +107,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [notificacionesSocket, setNotificacionesSocket] = useState<Omit<Notificacion, 'usuarioId'>[]>([]);
   const [papeletaCambios, setPapeletaCambios] = useState<CambioPapeleta[]>([]);
   const [papeletasBloqueadas, setPapeletasBloqueadas] = useState<PapeletaBloqueada[]>([]);
+  const { user } = useAuth();
   const { mostrar } = useToast();
 
   const limpiarNotificacionesSocket = useCallback(() => {
@@ -120,6 +122,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setPapeletasBloqueadas([]);
   }, []);
 
+  // Se reconecta solo cuando cambia el usuario autenticado (login/logout), no
+  // en cada render. El token se lee aquí dentro porque es una fuente externa
+  // (localStorage) que no dispara re-renders.
   useEffect(() => {
     const token = getToken();
     if (!token) return;
@@ -134,7 +139,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     s.on('connect_error', (err) => {
-      console.warn('[Socket.IO] Error de conexión:', err.message);
+      // Muestra en consola si el backend rechazó el token ("Sesión invalidada")
+      // o si el handshake falló por CORS: sin esto el fallo es silencioso.
+      console.error('[Socket.IO] Error de conexión:', err.message);
     });
 
     s.on('notificacion', (payload: { id: number; mensaje: string; fecha: string; leida: boolean }) => {
@@ -177,6 +184,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     });
 
     s.on('disconnect', () => {
+      // El estado `socket` conserva la instancia (Socket.IO reintenta solo); el
+      // indicador visual lo actualiza Layout.tsx escuchando este mismo evento.
       console.log('[Socket.IO] Desconectado');
     });
 
@@ -186,8 +195,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       s.disconnect();
       setSocket(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getToken()]); // Reconecta cuando cambia el token (login/logout)
+    // El token se obtiene dentro del efecto: la única dependencia reactiva real
+    // es el usuario autenticado (login/logout).
+  }, [user?.id]);
 
   return (
     <SocketContext.Provider

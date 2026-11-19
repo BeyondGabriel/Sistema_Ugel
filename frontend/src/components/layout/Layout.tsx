@@ -41,11 +41,16 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+/** Estado visual de la conexión en tiempo real con el backend. */
+type EstadoConexion = 'conectando' | 'enLinea' | 'desconectado';
+
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { socket } = useSocket();
   const { user } = useAuth();
-  const [conectado, setConectado] = useState<boolean>(() => socket?.connected ?? false);
+  // Mientras el SocketProvider aún no crea la instancia (o no hay sesión) el
+  // estado es "conectando": mostrar "Desconectado" sería un falso negativo.
+  const [estadoConexion, setEstadoConexion] = useState<EstadoConexion>('conectando');
   // Drawer de navegación en móvil (< md). En escritorio el sidebar siempre
   // está visible y este estado no tiene efecto.
   const [menuMovilAbierto, setMenuMovilAbierto] = useState(false);
@@ -53,21 +58,31 @@ export function Layout({ children }: LayoutProps) {
     (p) => location.pathname === p || location.pathname.startsWith(p + '/'),
   );
 
-  // El estado `connected` del socket no provoca renders por sí solo:
-  // se escuchan los eventos para que el indicador se actualice en vivo.
+  // El estado `connected` del socket no provoca renders por sí solo: se
+  // escuchan los eventos para que el indicador se actualice en vivo.
   useEffect(() => {
-    setConectado(socket?.connected ?? false);
-    if (!socket) return;
+    if (!socket) {
+      setEstadoConexion('conectando');
+      return;
+    }
 
-    const alConectar = () => setConectado(true);
-    const alDesconectar = () => setConectado(false);
+    // Si la instancia ya estaba conectada (p. ej. Layout se monta después)
+    // se refleja de inmediato; si aún está en el handshake, sigue en
+    // "conectando" hasta que llegue `connect` o `connect_error`.
+    setEstadoConexion(socket.connected ? 'enLinea' : 'conectando');
+
+    const alConectar = () => setEstadoConexion('enLinea');
+    const alDesconectar = () => setEstadoConexion('desconectado');
+    const alErrorConexion = () => setEstadoConexion('desconectado');
 
     socket.on('connect', alConectar);
     socket.on('disconnect', alDesconectar);
+    socket.on('connect_error', alErrorConexion);
 
     return () => {
       socket.off('connect', alConectar);
       socket.off('disconnect', alDesconectar);
+      socket.off('connect_error', alErrorConexion);
     };
   }, [socket]);
 
@@ -75,6 +90,20 @@ export function Layout({ children }: LayoutProps) {
   useEffect(() => {
     setMenuMovilAbierto(false);
   }, [location.pathname]);
+
+  // Etiqueta y color del punto según el estado de la conexión en tiempo real.
+  const etiquetaConexion =
+    estadoConexion === 'enLinea'
+      ? 'En línea'
+      : estadoConexion === 'desconectado'
+        ? 'Desconectado'
+        : 'Conectando...';
+  const clasePunto =
+    estadoConexion === 'enLinea'
+      ? 'bg-green-400'
+      : estadoConexion === 'desconectado'
+        ? 'bg-red-400'
+        : 'bg-brand-yellow';
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -109,10 +138,10 @@ export function Layout({ children }: LayoutProps) {
             {/* Status indicator (el texto se oculta en pantallas muy pequeñas) */}
             <div className="flex items-center gap-2 text-xs text-content-inverse/70">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${conectado ? 'bg-green-400' : 'bg-red-400'}`}
+                className={`inline-block h-2 w-2 rounded-full ${clasePunto}`}
                 aria-hidden="true"
               />
-              <span className="hidden sm:inline">{conectado ? 'En línea' : 'Desconectado'}</span>
+              <span className="hidden sm:inline">{etiquetaConexion}</span>
             </div>
 
             {/* Notificaciones */}

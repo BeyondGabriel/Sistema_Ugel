@@ -83,22 +83,22 @@ export function CampanitaNotificaciones() {
           : <BellIcon className="h-5 w-5" />
         }
         {noLeidas > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-state-error-fg text-[10px] font-bold text-white">
             {noLeidas > 9 ? '9+' : noLeidas}
           </span>
         )}
       </button>
 
       {abierto && (
-        <div className="absolute right-0 top-10 z-50 w-80 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl">
+        <div className="absolute right-0 top-10 z-50 w-80 rounded-ds-lg border border-line-light bg-surface-card shadow-modal">
           {/* Header del dropdown */}
-          <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
-            <span className="text-sm font-semibold text-gray-100">Notificaciones</span>
+          <div className="flex items-center justify-between border-b border-line-light px-4 py-3">
+            <span className="text-sm font-semibold text-content-primary">Notificaciones</span>
             {noLeidas > 0 && (
               <button
                 onClick={marcarTodas}
                 disabled={marcando}
-                className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="flex items-center gap-1 text-xs text-brand-blue transition-colors hover:text-brand-blue-hover disabled:opacity-50"
               >
                 <CheckIcon className="h-3.5 w-3.5" />
                 Marcar todas
@@ -107,27 +107,29 @@ export function CampanitaNotificaciones() {
           </div>
 
           {/* Lista */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-gray-800">
+          <div className="max-h-80 divide-y divide-line-light overflow-y-auto">
             {notificaciones.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-gray-500">Sin notificaciones</p>
+              <p className="px-4 py-6 text-center text-sm text-content-tertiary">Sin notificaciones</p>
             ) : (
               notificaciones.map((n) => (
                 <div
                   key={n.id}
-                  className={`px-4 py-3 text-sm ${n.leida ? 'opacity-60' : 'bg-gray-800/60'}`}
+                  className={`px-4 py-3 text-sm ${n.leida ? 'bg-surface-card' : 'bg-surface-bg'}`}
                 >
-                  <p className="text-gray-200 leading-snug">{n.mensaje}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{formatRelativo(n.fecha)}</p>
+                  <p className={`leading-snug ${n.leida ? 'text-content-secondary' : 'text-content-primary'}`}>
+                    {n.mensaje}
+                  </p>
+                  <p className="mt-0.5 text-xs text-content-tertiary">{formatRelativo(n.fecha)}</p>
                 </div>
               ))
             )}
           </div>
 
           {/* Footer */}
-          <div className="border-t border-gray-700 px-4 py-2">
+          <div className="border-t border-line-light px-4 py-2">
             <button
               onClick={() => { setAbierto(false); navigate('/notificaciones'); }}
-              className="w-full text-center text-xs text-emerald-400 hover:text-emerald-300 transition-colors py-1"
+              className="w-full py-1 text-center text-xs text-brand-blue transition-colors hover:text-brand-blue-hover"
             >
               Ver todas las notificaciones →
             </button>
