@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { ToastContainer } from './components/ui/Toast';
@@ -71,12 +71,25 @@ const DesignSystemPage = lazy(() =>
   import('./pages/demo/DesignSystemPage').then((m) => ({ default: m.DesignSystemPage })),
 );
 
-/** Fallback mostrado mientras se descarga el chunk de la página. */
-function CargandoPagina() {
+/** Fallback a pantalla completa para las páginas que no usan el Layout. */
+function CargandoPantallaCompleta() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-bg">
       <div className="animate-spin h-10 w-10 border-4 border-brand-blue border-t-transparent rounded-full" />
     </div>
+  );
+}
+
+/**
+ * Agrupa las rutas que NO usan el Layout (públicas y 404) bajo un único
+ * Suspense. Las rutas protegidas tienen su propio Suspense dentro de
+ * ProtectedRoute, de modo que el Layout nunca se desmonta al cargar una página.
+ */
+function RutasSinLayout() {
+  return (
+    <Suspense fallback={<CargandoPantallaCompleta />}>
+      <Outlet />
+    </Suspense>
   );
 }
 
@@ -96,43 +109,45 @@ export default function App() {
       <ToastProvider>
         <AuthProvider>
           <SocketProvider>
-            {/* Mientras se descarga el chunk de una página se muestra un spinner */}
-            <Suspense fallback={<CargandoPagina />}>
-              <Routes>
-                {/* ── Rutas públicas ────────────────────────── */}
+            <Routes>
+              {/* ── Rutas sin Layout (Suspense a pantalla completa) ───────── */}
+              <Route element={<RutasSinLayout />}>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/cambiar-password" element={<CambiarPasswordPage />} />
                 <Route path="/design-system" element={<DesignSystemPage />} />
-
-                {/* ── Rutas protegidas con sidebar ──────────── */}
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/asistencias/registro" element={<RegistroAsistenciaPage />} />
-                  <Route path="/asistencias" element={<AsistenciasPage />} />
-                  <Route path="/mis-asistencias" element={<MisAsistenciasPage />} />
-                  <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
-                  <Route path="/papeletas/:id/reenviar" element={<CrearPapeletaPage />} />
-                  <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
-                  <Route path="/papeletas" element={<PapeletasPage />} />
-                  <Route path="/vacaciones/mis-vacaciones" element={<MisVacacionesPage />} />
-                  <Route path="/vacaciones/gestion" element={<GestionVacacionesPage />} />
-                  <Route path="/visitas/registro" element={<RegistroVisitaPage />} />
-                  <Route path="/visitas" element={<VisitasPage />} />
-                  <Route path="/notificaciones" element={<NotificacionesPage />} />
-                  <Route path="/verificar-token" element={<VerificarTokenPage />} />
-                  {/* Solo ADMIN */}
-                  <Route path="/usuarios" element={<UsuariosPage />} />
-                  <Route path="/usuarios/nuevo" element={<UsuarioFormPage />} />
-                  <Route path="/usuarios/:id/editar" element={<UsuarioFormPage />} />
-                  <Route path="/jefaturas" element={<JefaturasPage />} />
-                  <Route path="/delegaciones" element={<DelegacionesPage />} />
-                </Route>
-
-                {/* ── Redirecciones y 404 ───────────────────── */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                {/* 404: tampoco usa el layout */}
                 <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
+              </Route>
+
+              {/* ── Rutas protegidas con layout ──────────────────────────── */}
+              {/* El Suspense de las páginas internas vive en ProtectedRoute,
+                  de modo que el Layout no se desmonta al navegar. */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/asistencias/registro" element={<RegistroAsistenciaPage />} />
+                <Route path="/asistencias" element={<AsistenciasPage />} />
+                <Route path="/mis-asistencias" element={<MisAsistenciasPage />} />
+                <Route path="/papeletas/nueva" element={<CrearPapeletaPage />} />
+                <Route path="/papeletas/:id/reenviar" element={<CrearPapeletaPage />} />
+                <Route path="/papeletas/:id" element={<DetallePapeletaPage />} />
+                <Route path="/papeletas" element={<PapeletasPage />} />
+                <Route path="/vacaciones/mis-vacaciones" element={<MisVacacionesPage />} />
+                <Route path="/vacaciones/gestion" element={<GestionVacacionesPage />} />
+                <Route path="/visitas/registro" element={<RegistroVisitaPage />} />
+                <Route path="/visitas" element={<VisitasPage />} />
+                <Route path="/notificaciones" element={<NotificacionesPage />} />
+                <Route path="/verificar-token" element={<VerificarTokenPage />} />
+                {/* Solo ADMIN */}
+                <Route path="/usuarios" element={<UsuariosPage />} />
+                <Route path="/usuarios/nuevo" element={<UsuarioFormPage />} />
+                <Route path="/usuarios/:id/editar" element={<UsuarioFormPage />} />
+                <Route path="/jefaturas" element={<JefaturasPage />} />
+                <Route path="/delegaciones" element={<DelegacionesPage />} />
+              </Route>
+
+              {/* ── Redirección raíz ─────────────────────────────────────── */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            </Routes>
 
             {/* Toast superpuesto a todo el árbol */}
             <ToastContainer />

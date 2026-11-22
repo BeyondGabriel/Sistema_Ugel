@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getToken } from '../../services/api';
@@ -8,6 +9,20 @@ interface ProtectedRouteProps {
   allowedRoles?: Rol[];
   /** Si true, usa el layout con sidebar. Por defecto: true */
   conLayout?: boolean;
+}
+
+/**
+ * Fallback local que se muestra DENTRO del layout mientras se descarga el
+ * chunk de la página. Al no incluir el shell (sidebar/topbar), el layout
+ * permanece montado y no se produce el "destello blanco" al navegar.
+ */
+function SpinnerPagina() {
+  return (
+    <div className="flex justify-center py-24" role="status" aria-live="polite">
+      <div className="animate-spin h-8 w-8 border-4 border-brand-blue border-t-transparent rounded-full" />
+      <span className="sr-only">Cargando página...</span>
+    </div>
+  );
 }
 
 /**
@@ -30,10 +45,16 @@ export function ProtectedRoute({ allowedRoles, conLayout = true }: ProtectedRout
   if (conLayout) {
     return (
       <Layout>
-        <Outlet />
+        <Suspense fallback={<SpinnerPagina />}>
+          <Outlet />
+        </Suspense>
       </Layout>
     );
   }
 
-  return <Outlet />;
+  return (
+    <Suspense fallback={<SpinnerPagina />}>
+      <Outlet />
+    </Suspense>
+  );
 }
